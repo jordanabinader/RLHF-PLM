@@ -24,7 +24,9 @@ RL-PLM/
 ├── amp_design/          # Antimicrobial peptide (AMP) design via RL
 ├── kinase_mutation/     # Kinase optimization via sequence mutation
 ├── antibody_mutation/   # Antibody–antigen binding optimization
-└── inverse_folding/     # Structure-conditioned sequence generation
+├── inverse_folding/     # Structure-conditioned sequence generation
+├── personalization/     # 🆕 Personalized RLHF module
+└── examples/            # 🆕 Example scripts for personalization
 ````
 
 ---
@@ -40,6 +42,35 @@ All datasets and pretrained checkpoints can be downloaded here:
 [**RL_PLM_data (Google Drive)**](https://drive.google.com/drive/folders/1_B0OEdwxUbMbncftXQypsoLvuMgIxrxu?usp=sharing)
 
 Unzip and place the contents under your `BASE_PATH` before running any experiment.
+
+---
+
+## ✨ NEW: Personalized RLHF
+
+We now support **personalized RLHF** for protein design! Train models that adapt to different user preferences and objectives.
+
+### Key Features:
+- 🎯 **Synthetic User Preferences**: Define virtual users with different property trade-offs
+- 📊 **Pairwise Preference Learning**: Train reward models from preference comparisons
+- 🔄 **Multi-User Support**: Train one model for multiple user profiles
+- 🧬 **Task-Specific Integration**: Ready-to-use for AMP, antibody, and kinase design
+
+### Quick Start:
+
+```bash
+# Train personalized reward models for AMP design
+python amp_design/personalized_grpo.py \
+    --classifier-checkpoint amp_design/best_new_4.pth \
+    --output-dir personalized_rewards/amp
+
+# Run complete example
+python examples/personalized_amp_example.py
+```
+
+### Documentation:
+- 📘 **[Personalization Module README](personalization/README.md)** - Detailed API documentation
+- 📗 **[Integration Guide](PERSONALIZATION_GUIDE.md)** - How to add personalization to your RL training
+- 📙 **[Example Script](examples/personalized_amp_example.py)** - Complete end-to-end example
 
 ---
 
