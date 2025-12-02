@@ -173,6 +173,7 @@ def ensure_dir(path: Path) -> None:
 
 class DistributedUltraLowMemoryGRPOTrainer:
     def __init__(self, policy, tokenizer, device, rank, world_size, use_user_conditioning=False):
+        print(f"[Trainer __init__] Rank {rank} starting initialization...", flush=True)
         self.dev = device
         self.rank = rank
         self.world_size = world_size
@@ -182,12 +183,23 @@ class DistributedUltraLowMemoryGRPOTrainer:
         # Wrap policy with user conditioning if enabled
         if use_user_conditioning:
             if self.is_main_process:
-                print("Wrapping policy with user conditioning...")
+                print("Wrapping policy with user conditioning...", flush=True)
             policy = UserConditionedPolicyWrapper(policy)
+            if self.is_main_process:
+                print("Policy wrapped successfully", flush=True)
         
+        if self.is_main_process:
+            print(f"Moving policy to device {device}...", flush=True)
         self.policy = policy.to(device)
+        if self.is_main_process:
+            print(f"Wrapping with DDP...", flush=True)
         self.policy = DDP(self.policy, device_ids=[rank], find_unused_parameters=False)
+        if self.is_main_process:
+            print(f"DDP wrapper applied", flush=True)
+            print(f"Creating reference model...", flush=True)
         self.ref_model = copy.deepcopy(self.policy.module if not use_user_conditioning else self.policy.module.base_policy).to(self.dev).half().eval()
+        if self.is_main_process:
+            print(f"Reference model created", flush=True)
         for p in self.ref_model.parameters():
             p.requires_grad = False
         trainable_params = [p for p in self.policy.parameters() if p.requires_grad]
@@ -655,11 +667,15 @@ def train_worker(rank, world_size, cfg):
         
         if rank == 0:
             print("Model loaded successfully!", flush=True)
+            print("Creating trainer...", flush=True)
 
         trainer = DistributedUltraLowMemoryGRPOTrainer(
             model, tok, device, rank, world_size, 
             use_user_conditioning=cfg.use_personalization
         )
+        
+        if rank == 0:
+            print("Trainer created successfully!", flush=True)
 
         # Setup reward function
         if cfg.use_personalization:
