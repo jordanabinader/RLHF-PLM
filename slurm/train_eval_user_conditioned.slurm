@@ -1,54 +1,51 @@
 #!/bin/bash
-#SBATCH -J user_conditioned_grpo
-#SBATCH -p mit_normal_gpu
-#SBATCH -c 8
-#SBATCH --mem=64G
-#SBATCH -t 24:00:00
-#SBATCH -G 1
-#SBATCH -o logs/user_conditioned_%j.out
-#SBATCH -e logs/user_conditioned_%j.err
 
-# User-Conditioned GRPO: Full Training & Evaluation Pipeline
-# This script:
-#   1. Trains a user-conditioned policy with multi-persona cycling
-#   2. Evaluates the trained policy across all personas
-#   3. Generates analysis and visualization
+#########################
+# Slurm job parameters  #
+#########################
 
-echo "========================================"
-echo "User-Conditioned GRPO Pipeline"
-echo "Job ID: $SLURM_JOB_ID"
-echo "Node: $SLURM_NODELIST"
-echo "Start Time: $(date)"
-echo "========================================"
-
-# Change to project directory
-cd $SLURM_SUBMIT_DIR
-echo "Working directory: $(pwd)"
+#SBATCH -J user_conditioned_grpo             # Job name
+#SBATCH -p mit_normal_gpu                   # GPU partition
+#SBATCH -c 4                                # CPU cores
+#SBATCH --mem=32G                           # Memory
+#SBATCH -t 2:00:00                         # Time limit
+#SBATCH -G 1                                # 1 GPU
+#SBATCH -o logs/user_conditioned_grpo_%j.out # STDOUT log
+#SBATCH -e logs/user_conditioned_grpo_%j.err # STDERR log
+#########################
+# Environment setup     #
+#########################
 
 # Create logs directory
 mkdir -p logs
+export WANDB_MODE=disabled
 
-# Load miniforge module
+# 1. Load the base system python
 module load miniforge
 
-# Create virtual environment if it doesn't exist
+# 2. Create the virtual environment (if it doesn't exist)
+# We use 'venv' (standard spelling), not 'vnev'
 if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
     python -m venv venv
 fi
 
-# Activate virtual environment
+# 3. Activate the environment (Fixing the typo here: vnev -> venv)
 source venv/bin/activate
 
-# Ensure we rely ONLY on this venv, ignoring local user packages
+# 4. CRITICAL: Ensure we rely ONLY on this venv, ignoring local user packages
 export PYTHONNOUSERSITE=1
 
-# Upgrade pip
+# 5. Upgrade pip inside the virtual environment
 python -m pip install --upgrade pip
 
-# Install/verify dependencies
-echo "Verifying dependencies..."
-python -m pip install --quiet --upgrade \
+# 6. Install packages
+# NOTE: We REMOVED 'pip uninstall'. You cannot uninstall system packages.
+# Instead, we use --ignore-installed to force installing a fresh copy 
+# into your local venv, shadowing the system version.
+
+echo "Installing dependencies..."
+python -m pip install --upgrade --ignore-installed --no-cache-dir \
     "torch>=2.0" \
     "transformers>=4.40.0" \
     "tokenizers>=0.19.0" \
@@ -57,14 +54,19 @@ python -m pip install --quiet --upgrade \
     "scipy" \
     "scikit-learn" \
     "fair-esm" \
-    "biopython"
+    "biopython" \
+    "esm" 
 
-echo "Python: $(which python)"
-echo "Python version: $(python --version)"
-echo "PyTorch version: $(python -c 'import torch; print(torch.__version__)')"
-echo "CUDA available: $(python -c 'import torch; print(torch.cuda.is_available())')"
-echo "GPU info:"
-nvidia-smi || echo "nvidia-smi not available"
+echo "Node: $(hostname)"
+echo "GPUs visible to this job:"
+nvidia-smi || echo "nvidia-smi not found"
+
+# Verify versions
+echo "Package versions in venv:"
+python -c "import transformers; print(f'transformers: {transformers.__version__}')"
+python -c "import peft; print(f'peft: {peft.__version__}')"
+python -c "import tokenizers; print(f'tokenizers: {tokenizers.__version__}')"
+python -c "import accelerate; print(f'accelerate: {accelerate.__version__}')"
 
 # Create output directories
 mkdir -p logs
@@ -102,7 +104,7 @@ echo "  - Output: $OUTPUT_DIR"
 echo ""
 
 # Run training
-python amp_design/grpo.py \
+python  amp_design/grpo.py \
   --base-model-path "$BASE_MODEL_PATH" \
   --tokenizer-path "$TOKENIZER_PATH" \
   --classifier-checkpoint "$ACTIVITY_CHECKPOINT" \
@@ -118,6 +120,7 @@ python amp_design/grpo.py \
   --save-every $SAVE_EVERY \
   --reward-penalty $REWARD_PENALTY \
   --min-charge $MIN_CHARGE \
+  --no-wandb \
   --tracker-project-name "user_conditioned_grpo" \
   --exp-name "multi_persona_${SLURM_JOB_ID}"
 
@@ -145,7 +148,7 @@ echo "  - Output: $EVAL_DIR"
 echo ""
 
 # Run evaluation
-python personalization/evaluate_user_conditioned_policy.py \
+venv/bin/python  personalization/evaluate_user_conditioned_policy.py \
   --checkpoint "$OUTPUT_DIR/final_model" \
   --tokenizer-path "$TOKENIZER_PATH" \
   --activity-checkpoint "$ACTIVITY_CHECKPOINT" \
