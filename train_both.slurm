@@ -9,6 +9,12 @@
 #SBATCH --mem=32G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
+#
+# TODO: Replace PARTITION_NAME_HERE with your cluster's GPU partition name
+# Run: bash slurm/check_cluster.sh to find available partitions
+#
+# Common partition names: sched_mit_hill (MIT), gpu_requeue (Harvard), 
+# normal (TACC), gpu (many clusters), compute (some clusters)
 
 # Print job information
 echo "========================================================================"
@@ -115,13 +121,14 @@ echo ""
 # Step 2: Create Stability Head Placeholder
 # ============================================================================
 echo "========================================================================"
-echo "Step 2/2: Creating Stability Head Placeholder"
+echo "Step 2/2: Creating Stability Head"
 echo "========================================================================"
 echo "Started at: $(date)"
 echo ""
 
 python personalization/train_stability.py \
-    --mode placeholder \
+    --mode load_esmtherm \
+    --esmtherm-checkpoint EsmTherm-main/output_dir/checkpoint-best \
     --output-dir personalization/checkpoints \
     --device cuda
 

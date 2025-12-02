@@ -3,12 +3,14 @@
 #SBATCH --output=logs/toxicity_%j.out
 #SBATCH --error=logs/toxicity_%j.err
 #SBATCH --time=6:00:00
-#SBATCH --partition=gpu
+#SBATCH --partition=PARTITION_NAME_HERE
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
+#
+# TODO: Replace PARTITION_NAME_HERE with your cluster's GPU partition name
 
 # Print job information
 echo "Starting toxicity training job"

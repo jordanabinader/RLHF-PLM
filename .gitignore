@@ -2,13 +2,15 @@ venv/
 logs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
-personalization/__pycache__/
+
 *.py[cod]
 *$py.class
-
+pytorch_model.bin
+*.pth
 # C extensions
 *.so
-
+EsmTherm-main/output_dir/
+personalization/checkpoints/
 # Distribution / packaging
 .Python
 build/

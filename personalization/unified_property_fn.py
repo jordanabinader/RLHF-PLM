@@ -160,12 +160,14 @@ class UnifiedPropertyFunction:
         )
         
         # 2. Compute activity scores p_act
-        p_act = self.activity_head(esm_embeddings)
+        # Note: ActivityHead uses layer 6 encoding internally
+        p_act = self.activity_head(sequences, device=self.device)
         if p_act.dim() == 0:
             p_act = p_act.unsqueeze(0)
         
         # 3. Compute stability scores p_stab
-        p_stab = self.stability_head(esm_embeddings)
+        # Note: StabilityHead uses EsmTherm model internally (sequences → stability)
+        p_stab = self.stability_head(sequences, device=self.device)
         if p_stab.dim() == 0:
             p_stab = p_stab.unsqueeze(0)
         

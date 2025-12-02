@@ -428,10 +428,25 @@ def main():
     
     if args.mode == "load_esmtherm":
         esmtherm_path = base_dir / args.esmtherm_checkpoint
-        model = load_esmtherm_checkpoint(esmtherm_path, args.device)
-        if model is None:
+        esmtherm_model = load_esmtherm_checkpoint(esmtherm_path, args.device)
+        if esmtherm_model is None:
             print("Failed to load EsmTherm checkpoint. Creating placeholder instead.")
             create_simple_stability_head(output_dir, args.device)
+        else:
+            # Save the full EsmTherm model for use in StabilityHead
+            output_dir.mkdir(parents=True, exist_ok=True)
+            checkpoint = {
+                'epoch': 'pretrained',
+                'model_state_dict': esmtherm_model.state_dict(),
+                'note': 'EsmTherm pre-trained model (full end-to-end)',
+                'source': str(esmtherm_path),
+                'model_type': 'esmtherm_full',
+            }
+            save_path = output_dir / "stability_head.pth"
+            torch.save(checkpoint, save_path)
+            print(f"✓ Saved EsmTherm model to: {save_path}")
+            print(f"✓ Model trained on 1.5M+ protein stability measurements")
+            print("Note: This is a full end-to-end model. StabilityHead will need to handle sequences internally.")
     
     elif args.mode == "train":
         if not args.train_csv or not args.val_csv or not args.test_csv:

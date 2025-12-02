@@ -3,12 +3,14 @@
 #SBATCH --output=logs/stability_%j.out
 #SBATCH --error=logs/stability_%j.err
 #SBATCH --time=0:10:00
-#SBATCH --partition=gpu
+#SBATCH --partition=PARTITION_NAME_HERE
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
+#
+# TODO: Replace PARTITION_NAME_HERE with your cluster's GPU partition name
 
 # Print job information
 echo "Starting stability placeholder creation job"
