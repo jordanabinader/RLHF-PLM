@@ -130,6 +130,7 @@ def parse_args() -> None:
     parser.add_argument("--prompt-file", type=Path, help="Optional file with prompts.")
     parser.add_argument("--esm-mode", type=str, default=defaults.esm_mode, choices=["8M", "650M"], help="ESM model size.")
     parser.add_argument("--reward-margin-threshold", type=float, default=defaults.reward_margin_threshold, help="Minimum reward margin to keep a group.")
+    parser.add_argument("--save-every", type=int, default=defaults.save_every, help="Save checkpoint every N steps.")
     parser.add_argument("--tracker-project-name", type=str, default=defaults.tracker_project_name, help="wandb project name.")
     parser.add_argument("--exp-name", type=str, default=defaults.exp_name, help="wandb experiment name.")
     parser.add_argument("--wandb-entity", type=str, help="Optional wandb entity.")
@@ -611,6 +612,8 @@ def create_distributed_dataloader(cfg, rank, world_size, tokenizer):
     return dataloader
 
 def train_worker(rank, world_size, cfg):
+    global CFG  # Declare CFG as global to avoid local scope issues
+    CFG = cfg
     try:
         setup_distributed(rank, world_size, cfg.port)
         set_seed(cfg.seed, rank)

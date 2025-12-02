@@ -6,8 +6,8 @@ from typing import Dict, Iterable, List, Sequence, Tuple
 import esm
 import torch
 from peft import LoraConfig, TaskType, get_peft_model
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerFast
+import os
 from progen2hf.models import ProGenConfig, ProGenForCausalLM
 
 
@@ -98,11 +98,32 @@ def load_pretrained_progen_model(
     AutoConfig.register("progen", ProGenConfig)
     AutoModelForCausalLM.register(ProGenConfig, ProGenForCausalLM)
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_path,
-        local_files_only=True,
-        trust_remote_code=True,
+    # tokenizer = AutoTokenizer.from_pretrained(
+    #     tokenizer_path,
+    #     local_files_only=True,
+    #     trust_remote_code=True,
+    # )
+
+    tokenizer_file = os.path.join(tokenizer_path, "tokenizer.json")
+    if not os.path.exists(tokenizer_file):
+        raise ValueError(f"Tokenizer file not found at {tokenizer_file}")
+
+    tokenizer = PreTrainedTokenizerFast(
+        tokenizer_file=tokenizer_file,
+        bos_token="<|bos|>",
+        eos_token="<|endoftext|>",
+        pad_token="<|endoftext|>",
+        unk_token="<|endoftext|>",
     )
+
+    # Ensure token IDs are set
+    if tokenizer.bos_token_id is None:
+        tokenizer.add_special_tokens({'bos_token': '<|bos|>'})
+    if tokenizer.eos_token_id is None:
+        tokenizer.add_special_tokens({'eos_token': '<|endoftext|>'})
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
 
     model = AutoModelForCausalLM.from_pretrained(
         base_model_path,

@@ -47,15 +47,15 @@ python -m pip install --upgrade pip
 echo "Installing dependencies..."
 python -m pip install --upgrade --ignore-installed --no-cache-dir \
     "torch>=2.0" \
-    "transformers>=4.40.0" \
-    "tokenizers>=0.19.0" \
+    "transformers==4.45.2" \
+    "tokenizers==0.20.0" \
+    "peft==0.10.0" \
     "numpy" \
     "pandas" \
     "scipy" \
     "scikit-learn" \
     "fair-esm" \
     "biopython" \
-    "esm" 
 
 echo "Node: $(hostname)"
 echo "GPUs visible to this job:"
@@ -74,11 +74,13 @@ mkdir -p grpo_runs/user_conditioned_multi
 mkdir -p evaluation_results/user_conditioned_multi
 
 # Configuration
-BASE_MODEL_PATH="progen2hf/progen2-small"
-TOKENIZER_PATH="progen2hf/"
-ACTIVITY_CHECKPOINT="amp_design/best_new_4.pth"
-TOXICITY_CHECKPOINT="personalization/checkpoints/toxicity_head.pth"
-STABILITY_CHECKPOINT="personalization/checkpoints/stability_head.pth"
+# Configuration - Use absolute paths
+REPO_ROOT="/orcd/home/002/jordancn/RLHF-PLM"  # Adjust to your actual path
+BASE_MODEL_PATH="${REPO_ROOT}/amp_design/progen2hf/progen2-small"
+TOKENIZER_PATH="${REPO_ROOT}/amp_design/progen2hf/progen2-small"
+ACTIVITY_CHECKPOINT="${REPO_ROOT}/amp_design/best_new_4.pth"
+TOXICITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/toxicity_head.pth"
+STABILITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/stability_head.pth"
 OUTPUT_DIR="grpo_runs/user_conditioned_multi"
 EVAL_DIR="evaluation_results/user_conditioned_multi"
 
@@ -102,6 +104,8 @@ echo "  - Batch size: $BATCH_SIZE"
 echo "  - Learning rate: $LR"
 echo "  - Output: $OUTPUT_DIR"
 echo ""
+cd "$REPO_ROOT"
+export PYTHONPATH="${REPO_ROOT}/amp_design:${PYTHONPATH}"
 
 # Run training
 python  amp_design/grpo.py \
@@ -148,7 +152,7 @@ echo "  - Output: $EVAL_DIR"
 echo ""
 
 # Run evaluation
-venv/bin/python  personalization/evaluate_user_conditioned_policy.py \
+python  personalization/evaluate_user_conditioned_policy.py \
   --checkpoint "$OUTPUT_DIR/final_model" \
   --tokenizer-path "$TOKENIZER_PATH" \
   --activity-checkpoint "$ACTIVITY_CHECKPOINT" \

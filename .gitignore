@@ -160,3 +160,6 @@ data_release/
 data.zip
 .DS_Store
 experiments/
+amp_design/progen2hf/progen2-small.tar.gz
+amp_design/progen2hf/progen2-small/
+evaluation_results/
