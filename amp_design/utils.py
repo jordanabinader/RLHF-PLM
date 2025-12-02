@@ -95,6 +95,7 @@ def load_pretrained_progen_model(
     inference_mode:
         Forwarded to ``LoraConfig`` to toggle PEFT inference behaviour.
     """
+    print("[utils] Registering ProGen config...", flush=True)
     AutoConfig.register("progen", ProGenConfig)
     AutoModelForCausalLM.register(ProGenConfig, ProGenForCausalLM)
 
@@ -104,6 +105,7 @@ def load_pretrained_progen_model(
     #     trust_remote_code=True,
     # )
 
+    print("[utils] Loading tokenizer...", flush=True)
     tokenizer_file = os.path.join(tokenizer_path, "tokenizer.json")
     if not os.path.exists(tokenizer_file):
         raise ValueError(f"Tokenizer file not found at {tokenizer_file}")
@@ -125,6 +127,7 @@ def load_pretrained_progen_model(
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
+    print(f"[utils] Tokenizer loaded. Loading model from {base_model_path}...", flush=True)
     model = AutoModelForCausalLM.from_pretrained(
         base_model_path,
         local_files_only=True,
@@ -132,6 +135,7 @@ def load_pretrained_progen_model(
         torch_dtype=torch_dtype,
         device_map=device_map,
     )
+    print("[utils] Base model loaded. Setting up LoRA...", flush=True)
 
     peft_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM,
@@ -142,12 +146,15 @@ def load_pretrained_progen_model(
         target_modules=list(target_modules),
     )
 
+    print("[utils] Applying PEFT config...", flush=True)
     model = get_peft_model(model, peft_config)
 
     if lora_checkpoint:
+        print(f"[utils] Loading LoRA checkpoint from {lora_checkpoint}...", flush=True)
         state = torch.load(Path(lora_checkpoint), map_location="cpu")
         model.load_state_dict(rename(state), strict=False)
 
+    print("[utils] Model setup complete, setting to eval mode", flush=True)
     model.eval()
     return tokenizer, model
 

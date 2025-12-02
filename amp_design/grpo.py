@@ -582,14 +582,17 @@ class DistributedUltraLowMemoryGRPOTrainer:
         return all_candidates
 
 def load_progen_memory_efficient():
+    print(f"[load_progen] Checking paths...", flush=True)
     if CFG.base_model_path is None or CFG.tokenizer_path is None:
         raise ValueError("Both base_model_path and tokenizer_path must be provided.")
+    print(f"[load_progen] Loading from {CFG.base_model_path}", flush=True)
     tokenizer, model = load_pretrained_progen_model(
         base_model_path=str(CFG.base_model_path),
         tokenizer_path=str(CFG.tokenizer_path),
         lora_checkpoint=str(CFG.lora_checkpoint) if CFG.lora_checkpoint else None,
         inference_mode=False,
     )
+    print(f"[load_progen] Done loading model", flush=True)
     return tokenizer, model
 
 def create_distributed_dataloader(cfg, rank, world_size, tokenizer):
@@ -644,9 +647,14 @@ def train_worker(rank, world_size, cfg):
                 print(f"Warning: Could not initialize wandb: {e}")
 
         if rank == 0:
-            print("Loading model...")
+            print("Loading model...", flush=True)
+            print(f"Model path: {CFG.base_model_path}", flush=True)
+            print(f"Tokenizer path: {CFG.tokenizer_path}", flush=True)
 
         tok, model = load_progen_memory_efficient()
+        
+        if rank == 0:
+            print("Model loaded successfully!", flush=True)
 
         trainer = DistributedUltraLowMemoryGRPOTrainer(
             model, tok, device, rank, world_size, 
