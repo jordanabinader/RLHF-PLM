@@ -1,6 +1,7 @@
 torch
 numpy
-transformers
+transformers>=4.46.0
+peft>=0.13.0
 trl
 fair-esm
 scikit-learn

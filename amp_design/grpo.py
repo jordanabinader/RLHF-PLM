@@ -38,9 +38,19 @@ from personalization.hybrid_reward import create_hybrid_reward_fn
 from personalization.user_conditioned_policy import UserConditionedPolicyWrapper
 
 def setup_distributed(rank, world_size, port="12355"):
+    print(f"[Rank {rank}] Setting up distributed with world_size={world_size}, port={port}", flush=True)
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = port
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    print(f"[Rank {rank}] Initializing process group...", flush=True)
+    # Add timeout to prevent hanging
+    import datetime
+    dist.init_process_group(
+        "nccl", 
+        rank=rank, 
+        world_size=world_size,
+        timeout=datetime.timedelta(seconds=60)
+    )
+    print(f"[Rank {rank}] Process group initialized", flush=True)
     torch.cuda.set_device(rank)
 
 def cleanup_distributed():
@@ -615,7 +625,9 @@ def train_worker(rank, world_size, cfg):
     global CFG  # Declare CFG as global to avoid local scope issues
     CFG = cfg
     try:
+        print(f"[Rank {rank}] Starting worker...", flush=True)
         setup_distributed(rank, world_size, cfg.port)
+        print(f"[Rank {rank}] Distributed setup complete", flush=True)
         set_seed(cfg.seed, rank)
         
         device = torch.device(f"cuda:{rank}")
@@ -828,21 +840,25 @@ def main():
     if CFG.world_size < 1:
         CFG.world_size = 1
 
-    print(f"Starting distributed training on {CFG.world_size} GPU(s)")
+    print(f"Starting distributed training on {CFG.world_size} GPU(s)", flush=True)
     ensure_dir(CFG.output_dir)
 
     try:
+        print("Setting multiprocessing start method to 'spawn'...", flush=True)
         mp.set_start_method('spawn', force=True)
     except RuntimeError:
+        print("Start method already set", flush=True)
         pass
 
     try:
+        print(f"Spawning {CFG.world_size} worker process(es)...", flush=True)
         mp.spawn(
             train_worker,
             args=(CFG.world_size, CFG),
             nprocs=CFG.world_size,
             join=True,
         )
+        print("All workers completed", flush=True)
     except KeyboardInterrupt:
         print("Training interrupted by user.")
     except Exception as e:

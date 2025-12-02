@@ -9,7 +9,7 @@ scipy>=1.7.0
 
 # Protein language models
 fair-esm>=2.0.0
-transformers>=4.30.0
+transformers>=4.46.0
 
 # Machine learning utilities
 scikit-learn>=1.0.0
@@ -32,7 +32,7 @@ gymnasium>=0.28.0
 stable-baselines3>=2.0.0
 
 # PEFT/LoRA for fine-tuning
-peft>=0.4.0
+peft>=0.13.0
 
 # Visualization (optional)
 matplotlib>=3.5.0
