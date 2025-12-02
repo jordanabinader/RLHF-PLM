@@ -1,0 +1,23 @@
+channels:
+  - conda-forge
+  - bioconda
+  - nvidia
+dependencies:
+  - conda-forge::python==3.10.*
+  - conda-forge::pip
+  - nvidia::cudatoolkit==11.6.*
+  - bioconda::mmseqs2
+  - bioconda::foldseek
+  - pip:
+      - accelerate
+      - biopython
+      - gdown
+      - scikit-learn
+      - datasets
+      - torch
+      - matplotlib
+      - numpy
+      - scipy
+      - seaborn
+      - transformers
+      - cchardet
