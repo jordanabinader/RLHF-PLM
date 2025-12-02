@@ -29,6 +29,14 @@ from mlp import MLP
 from reward import reward_amp_cls
 from utils import clean_sequences, load_esm, load_pretrained_progen_model
 
+# Add personalization imports
+import sys
+sys.path.append(str(Path(__file__).parent.parent))
+from personalization.unified_property_fn import create_unified_property_function
+from personalization.personas import get_persona, list_personas
+from personalization.hybrid_reward import create_hybrid_reward_fn
+from personalization.user_conditioned_policy import UserConditionedPolicyWrapper
+
 def setup_distributed(rank, world_size, port="12355"):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = port
@@ -82,6 +90,14 @@ class TrainingConfig:
     use_wandb: bool = True
     wandb_entity: str | None = None
     seed: int = 913
+    # Personalization fields
+    use_personalization: bool = False
+    persona_name: str = "BalancedDesigner"
+    persona_cycle_mode: str = "random"  # "random", "round_robin", or "single"
+    toxicity_checkpoint: Path | None = None
+    stability_checkpoint: Path | None = None
+    reward_penalty: float = -10.0
+    min_charge: float = 0.0
 
 
 CFG = TrainingConfig()
@@ -119,6 +135,14 @@ def parse_args() -> None:
     parser.add_argument("--wandb-entity", type=str, help="Optional wandb entity.")
     parser.add_argument("--port", type=str, default=defaults.port, help="Distributed master port.")
     parser.add_argument("--no-wandb", action="store_true", help="Disable wandb logging.")
+    # Personalization arguments
+    parser.add_argument("--use-personalization", action="store_true", help="Enable user-conditioned personalization")
+    parser.add_argument("--persona-name", type=str, default=defaults.persona_name, help="Persona to use")
+    parser.add_argument("--persona-cycle-mode", type=str, choices=["single", "random", "round_robin"], default=defaults.persona_cycle_mode, help="How to cycle through personas")
+    parser.add_argument("--toxicity-checkpoint", type=Path, help="Path to toxicity head checkpoint")
+    parser.add_argument("--stability-checkpoint", type=Path, help="Path to stability head checkpoint")
+    parser.add_argument("--reward-penalty", type=float, default=defaults.reward_penalty, help="Penalty for invalid sequences")
+    parser.add_argument("--min-charge", type=float, default=defaults.min_charge, help="Minimum net charge for validity")
     args = parser.parse_args()
 
     namespace = vars(args)
@@ -137,15 +161,22 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 class DistributedUltraLowMemoryGRPOTrainer:
-    def __init__(self, policy, tokenizer, device, rank, world_size):
+    def __init__(self, policy, tokenizer, device, rank, world_size, use_user_conditioning=False):
         self.dev = device
         self.rank = rank
         self.world_size = world_size
         self.is_main_process = (rank == 0)
         self.tok = tokenizer
+        
+        # Wrap policy with user conditioning if enabled
+        if use_user_conditioning:
+            if self.is_main_process:
+                print("Wrapping policy with user conditioning...")
+            policy = UserConditionedPolicyWrapper(policy)
+        
         self.policy = policy.to(device)
         self.policy = DDP(self.policy, device_ids=[rank], find_unused_parameters=False)
-        self.ref_model = copy.deepcopy(self.policy.module).to(self.dev).half().eval()
+        self.ref_model = copy.deepcopy(self.policy.module if not use_user_conditioning else self.policy.module.base_policy).to(self.dev).half().eval()
         for p in self.ref_model.parameters():
             p.requires_grad = False
         trainable_params = [p for p in self.policy.parameters() if p.requires_grad]
@@ -482,7 +513,7 @@ class DistributedUltraLowMemoryGRPOTrainer:
             groups.append(group)
         return groups
 
-    def generate_candidates_ultra_memory_efficient(self, prompts):
+    def generate_candidates_ultra_memory_efficient(self, prompts, user_context=None):
         bad_ids = [self.tok.encode(w) for w in ["B", "O", "U", "X", "Z"]]
         gen_cfg = dict(
             max_new_tokens=CFG.max_new_tokens, 
@@ -498,6 +529,10 @@ class DistributedUltraLowMemoryGRPOTrainer:
             return_dict_in_generate=False
         )
         
+        # Add user context if provided and policy supports it
+        if user_context is not None and hasattr(self.policy.module, 'generate'):
+            gen_cfg['user_context'] = user_context
+        
         all_candidates = []
         
         self.policy.eval()
@@ -509,7 +544,16 @@ class DistributedUltraLowMemoryGRPOTrainer:
                 for cand_idx in range(CFG.num_candidates):
                     try:
                         prompt_input = prompt.clone().detach().unsqueeze(0).to(self.dev, non_blocking=True)
-                        output = self.policy.module.generate(prompt_input, **gen_cfg)
+                        # Check if policy has user-conditioned generate method
+                        if hasattr(self.policy.module, 'generate') and user_context is not None:
+                            output = self.policy.module.generate(prompt_input, **gen_cfg)
+                        else:
+                            # Fall back to base policy generate (remove user_context from gen_cfg)
+                            gen_cfg_no_user = {k: v for k, v in gen_cfg.items() if k != 'user_context'}
+                            if hasattr(self.policy.module, 'base_policy'):
+                                output = self.policy.module.base_policy.generate(prompt_input, **gen_cfg_no_user)
+                            else:
+                                output = self.policy.module.generate(prompt_input, **gen_cfg_no_user)
                         candidates.append(output[0][len(prompt):].detach().cpu())
                         del prompt_input, output
                     except torch.cuda.OutOfMemoryError:
@@ -589,27 +633,86 @@ def train_worker(rank, world_size, cfg):
 
         tok, model = load_progen_memory_efficient()
 
-        trainer = DistributedUltraLowMemoryGRPOTrainer(model, tok, device, rank, world_size)
+        trainer = DistributedUltraLowMemoryGRPOTrainer(
+            model, tok, device, rank, world_size, 
+            use_user_conditioning=cfg.use_personalization
+        )
 
-        if rank == 0:
-            print("Loading ESM and classifier...")
-        
-        batch_converter, esm_model, alphabet = load_esm(cfg.esm_mode, device=device)
-        classifier = MLP(input_dim=320, hidden_dim=128).to(device)
-        if cfg.classifier_checkpoint is None:
-            raise ValueError("Classifier checkpoint must be provided.")
-        classifier.load_state_dict(torch.load(cfg.classifier_checkpoint, map_location="cpu"))
-        classifier.eval()
-
-        def reward_fn(seqs):
-            return reward_amp_cls(
-                seqs,
-                esm_model=esm_model,
-                batch_converter=batch_converter,
-                alphabet=alphabet,
-                classifier=classifier,
+        # Setup reward function
+        if cfg.use_personalization:
+            if rank == 0:
+                print("Loading property function for personalization...")
+            
+            # Load property function
+            property_fn = create_unified_property_function(
+                activity_checkpoint=cfg.classifier_checkpoint,
+                toxicity_checkpoint=cfg.toxicity_checkpoint,
+                stability_checkpoint=cfg.stability_checkpoint,
+                esm_model_size=cfg.esm_mode,
                 device=device,
             )
+            
+            # Setup persona cycling
+            if cfg.persona_cycle_mode == "single":
+                personas_to_use = [get_persona(cfg.persona_name)]
+                if rank == 0:
+                    print(f"Using single persona: {cfg.persona_name}")
+            else:
+                personas_to_use = [get_persona(name) for name in list_personas()]
+                if rank == 0:
+                    print(f"Cycling through {len(personas_to_use)} personas ({cfg.persona_cycle_mode} mode)")
+            
+            current_persona_idx = 0
+            
+            def get_next_persona():
+                nonlocal current_persona_idx
+                if cfg.persona_cycle_mode == "random":
+                    return random.choice(personas_to_use)
+                else:  # round_robin or single
+                    persona = personas_to_use[current_persona_idx]
+                    if cfg.persona_cycle_mode == "round_robin":
+                        current_persona_idx = (current_persona_idx + 1) % len(personas_to_use)
+                    return persona
+            
+            # Create reward function generator
+            def make_reward_fn(persona):
+                return create_hybrid_reward_fn(
+                    property_function=property_fn,
+                    persona=persona,
+                    penalty=cfg.reward_penalty,
+                    min_charge=cfg.min_charge,
+                    device=device,
+                )
+            
+            # Initialize with first persona
+            current_persona = get_next_persona()
+            reward_fn = make_reward_fn(current_persona)
+            
+        else:
+            # Original classifier-based reward
+            if rank == 0:
+                print("Loading ESM and classifier...")
+            
+            batch_converter, esm_model, alphabet = load_esm(cfg.esm_mode, device=device)
+            classifier = MLP(input_dim=320, hidden_dim=128).to(device)
+            if cfg.classifier_checkpoint is None:
+                raise ValueError("Classifier checkpoint must be provided.")
+            classifier.load_state_dict(torch.load(cfg.classifier_checkpoint, map_location="cpu", weights_only=False))
+            classifier.eval()
+
+            def reward_fn(seqs):
+                return reward_amp_cls(
+                    seqs,
+                    esm_model=esm_model,
+                    batch_converter=batch_converter,
+                    alphabet=alphabet,
+                    classifier=classifier,
+                    device=device,
+                )
+            
+            personas_to_use = None
+            get_next_persona = None
+            make_reward_fn = None
         
         dataloader = create_distributed_dataloader(cfg, rank, world_size, tok)
         for epoch in range(cfg.epochs):
@@ -619,6 +722,17 @@ def train_worker(rank, world_size, cfg):
             for batch_idx, batch in enumerate(dataloader):
                 if rank == 0:
                     print(f"\nBatch {batch_idx+1}")
+                
+                # Select persona for this batch if using personalization
+                if cfg.use_personalization:
+                    current_persona = get_next_persona()
+                    reward_fn = make_reward_fn(current_persona)
+                    user_context = current_persona.weights.to(device)
+                    
+                    if rank == 0:
+                        print(f"Using persona: {current_persona.name}")
+                else:
+                    user_context = None
                 
                 try:
                     if isinstance(batch, dict):
@@ -633,7 +747,13 @@ def train_worker(rank, world_size, cfg):
                     prompts = prompts.to(device)
                     prompts = [prompts[i] for i in range(prompts.size(0))]
                     prompts = trainer.truncate_sequences(prompts)
-                    candidates_list = trainer.generate_candidates_ultra_memory_efficient(prompts)
+                    
+                    # Generate with user context
+                    candidates_list = trainer.generate_candidates_ultra_memory_efficient(
+                        prompts, 
+                        user_context=user_context
+                    )
+                    
                     groups = trainer.create_grpo_groups(prompts, candidates_list, reward_fn)
                     if not groups:
                         if rank == 0:
@@ -645,7 +765,13 @@ def train_worker(rank, world_size, cfg):
                         checkpoint_path = cfg.output_dir / f"checkpoint_step_{trainer.step}"
                         ensure_dir(checkpoint_path)
                         try:
-                            trainer.policy.module.save_pretrained(checkpoint_path, safe_serialization=True)
+                            # Save the policy (handles user-conditioned wrapper if present)
+                            if cfg.use_personalization and hasattr(trainer.policy.module, 'save_pretrained'):
+                                trainer.policy.module.save_pretrained(checkpoint_path, safe_serialization=True)
+                            elif hasattr(trainer.policy.module, 'base_policy'):
+                                trainer.policy.module.base_policy.save_pretrained(checkpoint_path, safe_serialization=True)
+                            else:
+                                trainer.policy.module.save_pretrained(checkpoint_path, safe_serialization=True)
                             print(f"Saving checkpoint: {checkpoint_path}")
                         except Exception as e:
                             print(f"Error saving checkpoint: {e}")
@@ -665,7 +791,13 @@ def train_worker(rank, world_size, cfg):
             try:
                 final_path = cfg.output_dir / "final_model"
                 ensure_dir(final_path)
-                trainer.policy.module.save_pretrained(final_path, safe_serialization=True)
+                # Save the policy (handles user-conditioned wrapper if present)
+                if cfg.use_personalization and hasattr(trainer.policy.module, 'save_pretrained'):
+                    trainer.policy.module.save_pretrained(final_path, safe_serialization=True)
+                elif hasattr(trainer.policy.module, 'base_policy'):
+                    trainer.policy.module.base_policy.save_pretrained(final_path, safe_serialization=True)
+                else:
+                    trainer.policy.module.save_pretrained(final_path, safe_serialization=True)
                 print(f"Save final checkpoint: {final_path}")
             except Exception as e:
                 print(f"Failure on model saving: {e}")

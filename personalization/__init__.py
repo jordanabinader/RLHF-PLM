@@ -40,6 +40,20 @@ from .personas import (
     create_custom_persona,
     explain_reward,
 )
+from .validity import (
+    is_sequence_valid,
+    validate_sequences,
+    calculate_net_charge,
+    get_validity_stats,
+)
+from .hybrid_reward import (
+    create_hybrid_reward_fn,
+    create_blended_hybrid_reward_fn,
+)
+from .user_conditioned_policy import (
+    UserContextProjector,
+    UserConditionedPolicyWrapper,
+)
 
 __all__ = [
     # Old architecture
@@ -66,5 +80,14 @@ __all__ = [
     "compute_personalized_reward",
     "create_custom_persona",
     "explain_reward",
+    # User-conditioned policy
+    "is_sequence_valid",
+    "validate_sequences",
+    "calculate_net_charge",
+    "get_validity_stats",
+    "create_hybrid_reward_fn",
+    "create_blended_hybrid_reward_fn",
+    "UserContextProjector",
+    "UserConditionedPolicyWrapper",
 ]
 
