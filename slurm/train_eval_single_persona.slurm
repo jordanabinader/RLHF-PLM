@@ -1,14 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=single_persona_grpo
-#SBATCH --output=logs/single_persona_%j.out
-#SBATCH --error=logs/single_persona_%j.err
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:1
+#SBATCH -J single_persona_grpo
+#SBATCH -p mit_normal_gpu
+#SBATCH -c 8
 #SBATCH --mem=48G
-#SBATCH --time=12:00:00
-#SBATCH --partition=PARTITION_NAME_HERE
+#SBATCH -t 12:00:00
+#SBATCH -G 1
+#SBATCH -o logs/single_persona_%j.out
+#SBATCH -e logs/single_persona_%j.err
 
 # Single Persona GRPO: Full Training & Evaluation Pipeline
 # This script trains with one specific persona (faster, good for testing)
@@ -24,13 +22,43 @@ echo "========================================"
 cd $SLURM_SUBMIT_DIR
 echo "Working directory: $(pwd)"
 
-# Load modules (adjust for your cluster)
-module purge
-module load cuda/11.8
-module load python/3.10
+# Create logs directory
+mkdir -p logs
+
+# Load miniforge module
+module load miniforge
+
+# Create virtual environment if it doesn't exist
+if [ ! -d "venv" ]; then
+    echo "Creating virtual environment..."
+    python -m venv venv
+fi
 
 # Activate virtual environment
 source venv/bin/activate
+
+# Ensure we rely ONLY on this venv, ignoring local user packages
+export PYTHONNOUSERSITE=1
+
+# Upgrade pip
+python -m pip install --upgrade pip
+
+# Install/verify dependencies
+echo "Verifying dependencies..."
+python -m pip install --quiet --upgrade \
+    "torch>=2.0" \
+    "transformers>=4.40.0" \
+    "tokenizers>=0.19.0" \
+    "numpy" \
+    "pandas" \
+    "scipy" \
+    "scikit-learn" \
+    "fair-esm" \
+    "biopython"
+
+echo "Python: $(which python)"
+echo "CUDA available: $(python -c 'import torch; print(torch.cuda.is_available())')"
+nvidia-smi || echo "nvidia-smi not available"
 
 # Create output directories
 mkdir -p logs

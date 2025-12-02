@@ -54,51 +54,70 @@ bash slurm/check_cluster.sh
 
 This will show available partitions and GPUs on your cluster.
 
-### Step 2: Update Partition Name
+### Step 2: Verify Cluster Configuration
 
-Edit the SLURM script and replace `PARTITION_NAME_HERE`:
+The scripts are pre-configured for **MIT Supercloud** with:
+- Partition: `mit_normal_gpu`
+- Module: `miniforge`
+- Virtual environment auto-creation
+
+If you're on a different cluster, edit these lines in the SLURM script:
 
 ```bash
 # Open the script
 nano slurm/train_eval_user_conditioned.slurm
 
-# Find this line:
-#SBATCH --partition=PARTITION_NAME_HERE
+# Update partition (line ~3):
+#SBATCH -p mit_normal_gpu  # Change to your GPU partition
 
-# Replace with your cluster's GPU partition, e.g.:
-#SBATCH --partition=gpu
-# or
-#SBATCH --partition=compute
-```
-
-### Step 3: Adjust Module Loading (if needed)
-
-Different clusters use different module systems. Edit the module loading section:
-
-```bash
-# Current (adjust for your cluster):
-module purge
-module load cuda/11.8
-module load python/3.10
+# Update module loading (line ~35):
+module load miniforge      # Change to your Python module
 
 # Examples for different clusters:
-# MIT Engaging:
-module load cuda/11.7
-module load anaconda/2023
+# Generic cluster with conda:
+module load anaconda3
 
-# Generic cluster:
-module load cuda
-module load python
+# Cluster with system Python:
+# (Remove module load line, ensure python3 is in PATH)
+
+# Cluster with specific CUDA/Python:
+module load cuda/11.8
+module load python/3.10
 ```
 
-### Step 4: Verify Paths
+### Step 3: Verify Virtual Environment
 
-Ensure these paths exist and are correct:
+The script automatically:
+1. Creates `venv/` if it doesn't exist
+2. Installs all required packages
+3. Uses `PYTHONNOUSERSITE=1` to avoid conflicts
+
+No manual setup needed!
+
+### Step 4: Prepare Checkpoints
+
+Ensure these checkpoints exist before training:
+
+**Required:**
+- ✓ `amp_design/best_new_4.pth` - Activity classifier (should already exist)
+- ✓ `personalization/checkpoints/toxicity_head.pth` - Run `sbatch slurm/train_toxicity.slurm` first
+- ✓ `personalization/checkpoints/stability_head.pth` - Run `sbatch slurm/train_stability.slurm` first
+
+**Optional (if using ProGen):**
 - `progen2hf/progen2-small` - Base model
 - `progen2hf/` - Tokenizer
-- `amp_design/best_new_4.pth` - Activity checkpoint
-- `personalization/checkpoints/toxicity_head.pth` - Toxicity checkpoint
-- `personalization/checkpoints/stability_head.pth` - Stability checkpoint
+
+**To train property heads first:**
+```bash
+# 1. Train toxicity head
+sbatch slurm/train_toxicity.slurm
+
+# 2. Train/load stability head
+sbatch slurm/train_stability.slurm
+
+# 3. Wait for both to complete, then train GRPO
+sbatch slurm/train_eval_user_conditioned.slurm
+```
 
 ## Monitoring Jobs
 
