@@ -168,22 +168,42 @@ class StabilityHead(nn.Module):
                 from transformers import EsmTokenizer, EsmForSequenceClassification
                 
                 # Check if checkpoint is our wrapped format or direct HF model
-                checkpoint_path = Path(checkpoint_path)
+                checkpoint_path = Path(checkpoint_path).resolve()  # Resolve to absolute path
                 if checkpoint_path.suffix == '.pth':
                     # Our wrapped format
                     ckpt = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
                     if ckpt.get('model_type') == 'esmtherm_full':
                         # Load from the esmtherm_path (or legacy 'source' key)
                         source_path = ckpt.get('esmtherm_path') or ckpt.get('source')
+                        
+                        # Resolve relative paths relative to repo root
+                        if source_path:
+                            source_path = Path(source_path)
+                            if not source_path.is_absolute():
+                                # Relative path - resolve from repo root
+                                # checkpoint_path is like: /full/path/RLHF-PLM/personalization/checkpoints/stability_head.pth
+                                # So parent.parent.parent is the repo root
+                                repo_root = checkpoint_path.parent.parent.parent
+                                source_path = (repo_root / source_path).resolve()
+                            
+                            # If path doesn't exist, try to find it in standard locations
+                            if not source_path.exists():
+                                # Try relative to repo root
+                                repo_root = checkpoint_path.parent.parent.parent
+                                fallback = repo_root / 'EsmTherm-main/output_dir/checkpoint-best'
+                                if fallback.exists():
+                                    source_path = fallback
+                        
                         if source_path is None:
-                            # Fallback: try to find EsmTherm checkpoint
+                            # No path in checkpoint - try to find EsmTherm automatically
+                            repo_root = checkpoint_path.parent.parent.parent
                             possible_paths = [
-                                checkpoint_path.parent.parent / 'EsmTherm-main/output_dir/checkpoint-best',
+                                repo_root / 'EsmTherm-main/output_dir/checkpoint-best',
                                 Path('EsmTherm-main/output_dir/checkpoint-best'),
                             ]
                             for p in possible_paths:
                                 if p.exists():
-                                    source_path = str(p)
+                                    source_path = p
                                     break
                         
                         if source_path and Path(source_path).exists():
