@@ -126,6 +126,7 @@ python  amp_design/grpo.py \
   --save-every $SAVE_EVERY \
   --reward-penalty $REWARD_PENALTY \
   --min-charge $MIN_CHARGE \
+  --esm-mode "650M" \
   --tracker-project-name "user_conditioned_grpo" \
   --exp-name "multi_persona_${SLURM_JOB_ID}"
 
@@ -161,7 +162,8 @@ python  personalization/evaluate_user_conditioned_policy.py \
   --stability-checkpoint "$STABILITY_CHECKPOINT" \
   --num-sequences 200 \
   --output-dir "$EVAL_DIR" \
-  --device cuda
+  --device cuda \
+  --esm-mode "650M"
 
 EVAL_EXIT_CODE=$?
 

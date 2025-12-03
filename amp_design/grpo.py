@@ -199,7 +199,8 @@ class DistributedUltraLowMemoryGRPOTrainer:
         self.policy = policy.to(device)
         if self.is_main_process:
             print(f"Wrapping with DDP...", flush=True)
-        self.policy = DDP(self.policy, device_ids=[rank], find_unused_parameters=False)
+        # Enable find_unused_parameters for user-conditioned wrapper
+        self.policy = DDP(self.policy, device_ids=[rank], find_unused_parameters=use_user_conditioning)
         if self.is_main_process:
             print(f"DDP wrapper applied", flush=True)
             print(f"Creating reference model...", flush=True)
