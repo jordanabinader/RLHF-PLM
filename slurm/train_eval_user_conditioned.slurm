@@ -8,7 +8,7 @@
 #SBATCH -p mit_normal_gpu                   # GPU partition
 #SBATCH -c 4                                # CPU cores
 #SBATCH --mem=32G                           # Memory
-#SBATCH -t 2:00:00                         # Time limit
+#SBATCH -t 6:00:00                         # Time limit
 #SBATCH -G 1                                # 1 GPU
 #SBATCH -o logs/user_conditioned_grpo_%j.out # STDOUT log
 #SBATCH -e logs/user_conditioned_grpo_%j.err # STDERR log
