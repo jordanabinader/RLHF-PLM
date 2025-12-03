@@ -89,7 +89,7 @@ OUTPUT_DIR="grpo_runs/user_conditioned_multi"
 EVAL_DIR="evaluation_results/user_conditioned_multi"
 
 # Training parameters
-EPOCHS=20
+EPOCHS=1
 BATCH_SIZE=32
 STEPS=150  # Increased from 100 to allow more stable convergence
 LR=2e-5
