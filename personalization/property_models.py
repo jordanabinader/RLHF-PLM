@@ -173,8 +173,8 @@ class StabilityHead(nn.Module):
                     # Our wrapped format
                     ckpt = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
                     if ckpt.get('model_type') == 'esmtherm_full':
-                        # Load from the original source path
-                        source_path = ckpt.get('source')
+                        # Load from the esmtherm_path (or legacy 'source' key)
+                        source_path = ckpt.get('esmtherm_path') or ckpt.get('source')
                         if source_path is None:
                             # Fallback: try to find EsmTherm checkpoint
                             possible_paths = [
@@ -187,6 +187,7 @@ class StabilityHead(nn.Module):
                                     break
                         
                         if source_path and Path(source_path).exists():
+                            print(f"[StabilityHead] Loading EsmTherm from {source_path}")
                             self.model = EsmForSequenceClassification.from_pretrained(source_path)
                             # Load tokenizer from base ESM model (checkpoint doesn't include tokenizer files)
                             config_path = Path(source_path) / 'config.json'
@@ -199,6 +200,7 @@ class StabilityHead(nn.Module):
                             else:
                                 # Fallback to default ESM-2 tokenizer
                                 self.tokenizer = EsmTokenizer.from_pretrained('facebook/esm2_t12_35M_UR50D')
+                            print(f"[StabilityHead] EsmTherm loaded successfully")
                         else:
                             print(f"Warning: EsmTherm source path not found: {source_path}")
                             self.use_esmtherm = False
@@ -331,33 +333,49 @@ def load_stability_head(checkpoint_path: str, device: str = "cuda") -> Stability
     print(f"[load_stability_head] Loading from {checkpoint_path}...", flush=True)
     checkpoint_path = Path(checkpoint_path)
     
-    # Check if it's an EsmTherm checkpoint
-    if checkpoint_path.exists():
-        ckpt = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
-        if ckpt.get('model_type') == 'esmtherm_full':
-            # Load EsmTherm model
-            print(f"[load_stability_head] Using EsmTherm model", flush=True)
+    # Check if it's an EsmTherm checkpoint wrapper
+    if checkpoint_path.exists() and checkpoint_path.suffix == '.pth':
+        try:
+            ckpt = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+            if ckpt.get('model_type') == 'esmtherm_full':
+                # This is an EsmTherm wrapper - load via StabilityHead
+                print(f"[load_stability_head] Detected EsmTherm wrapper", flush=True)
+                model = StabilityHead(checkpoint_path=str(checkpoint_path), use_esmtherm=True)
+                model = model.to(device)
+                model.eval()
+                print(f"[load_stability_head] Done", flush=True)
+                return model
+        except Exception as e:
+            print(f"[load_stability_head] Error loading as EsmTherm: {e}", flush=True)
+    
+    # Check if it's a direct HF checkpoint directory
+    if checkpoint_path.is_dir() and (checkpoint_path / 'config.json').exists():
+        try:
+            print(f"[load_stability_head] Detected HuggingFace checkpoint directory", flush=True)
             model = StabilityHead(checkpoint_path=str(checkpoint_path), use_esmtherm=True)
             model = model.to(device)
             model.eval()
             print(f"[load_stability_head] Done", flush=True)
             return model
+        except Exception as e:
+            print(f"[load_stability_head] Error loading HF checkpoint: {e}", flush=True)
     
     # Fallback: load placeholder model
     print("Warning: Loading placeholder stability head (not EsmTherm)", flush=True)
     model = StabilityHead(use_esmtherm=False)
-    print(f"[load_stability_head] Done (placeholder)", flush=True)
     
     # Try to load state dict if available
-    if checkpoint_path.exists():
+    if checkpoint_path.exists() and checkpoint_path.suffix == '.pth':
         try:
             checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
             if 'model_state_dict' in checkpoint and hasattr(model, 'mlp'):
                 model.mlp.load_state_dict(checkpoint['model_state_dict'])
+                print(f"[load_stability_head] Loaded MLP weights from checkpoint")
         except Exception as e:
             print(f"Warning: Could not load checkpoint state: {e}")
     
     model = model.to(device)
     model.eval()
+    print(f"[load_stability_head] Done (placeholder)", flush=True)
     return model
 
