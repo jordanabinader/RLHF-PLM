@@ -680,7 +680,7 @@ def train_worker(rank, world_size, cfg):
         # Setup reward function
         if cfg.use_personalization:
             if rank == 0:
-                print("Loading property function for personalization...")
+                print("Loading property function for personalization...", flush=True)
             
             # Load property function
             property_fn = create_unified_property_function(
@@ -691,15 +691,20 @@ def train_worker(rank, world_size, cfg):
                 device=device,
             )
             
+            if rank == 0:
+                print("Property function loaded successfully!", flush=True)
+            
             # Setup persona cycling
             if cfg.persona_cycle_mode == "single":
                 personas_to_use = [get_persona(cfg.persona_name)]
                 if rank == 0:
-                    print(f"Using single persona: {cfg.persona_name}")
+                    print(f"Using single persona: {cfg.persona_name}", flush=True)
             else:
+                if rank == 0:
+                    print("Loading personas...", flush=True)
                 personas_to_use = [get_persona(name) for name in list_personas()]
                 if rank == 0:
-                    print(f"Cycling through {len(personas_to_use)} personas ({cfg.persona_cycle_mode} mode)")
+                    print(f"Cycling through {len(personas_to_use)} personas ({cfg.persona_cycle_mode} mode)", flush=True)
             
             current_persona_idx = 0
             
@@ -730,9 +735,11 @@ def train_worker(rank, world_size, cfg):
         else:
             # Original classifier-based reward
             if rank == 0:
-                print("Loading ESM and classifier...")
+                print("Loading ESM and classifier...", flush=True)
             
             batch_converter, esm_model, alphabet = load_esm(cfg.esm_mode, device=device)
+            if rank == 0:
+                print("ESM loaded", flush=True)
             classifier = MLP(input_dim=320, hidden_dim=128).to(device)
             if cfg.classifier_checkpoint is None:
                 raise ValueError("Classifier checkpoint must be provided.")
@@ -753,7 +760,11 @@ def train_worker(rank, world_size, cfg):
             get_next_persona = None
             make_reward_fn = None
         
+        if rank == 0:
+            print("Creating dataloader...", flush=True)
         dataloader = create_distributed_dataloader(cfg, rank, world_size, tok)
+        if rank == 0:
+            print(f"Dataloader created. Starting training loop...", flush=True)
         for epoch in range(cfg.epochs):
             if rank == 0:
                 print(f"\nEpoch {epoch+1}/{cfg.epochs}")

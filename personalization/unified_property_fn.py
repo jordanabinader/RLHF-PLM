@@ -327,7 +327,7 @@ def create_unified_property_function(
     stability_head = load_stability_head(stability_checkpoint, device)
     
     # Create unified function
-    print("Creating unified property function...")
+    print("Creating unified property function...", flush=True)
     property_fn = UnifiedPropertyFunction(
         esm_model=esm_model,
         batch_converter=batch_converter,
@@ -341,6 +341,6 @@ def create_unified_property_function(
         representation_layer=representation_layer,
     )
     
-    print("✓ Unified property function ready")
+    print("✓ Unified property function ready", flush=True)
     return property_fn
 
