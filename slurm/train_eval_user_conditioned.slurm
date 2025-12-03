@@ -18,7 +18,8 @@
 
 # Create logs directory
 mkdir -p logs
-export WANDB_MODE=disabled
+# Enable wandb (comment this line to enable wandb logging)
+# export WANDB_MODE=disabled
 
 # 1. Load the base system python
 module load miniforge
@@ -56,6 +57,7 @@ python -m pip install --upgrade --ignore-installed --no-cache-dir \
     "scikit-learn" \
     "fair-esm" \
     "biopython" \
+    "wandb" \
 
 echo "Node: $(hostname)"
 echo "GPUs visible to this job:"
@@ -124,7 +126,6 @@ python  amp_design/grpo.py \
   --save-every $SAVE_EVERY \
   --reward-penalty $REWARD_PENALTY \
   --min-charge $MIN_CHARGE \
-  --no-wandb \
   --tracker-project-name "user_conditioned_grpo" \
   --exp-name "multi_persona_${SLURM_JOB_ID}"
 

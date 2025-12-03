@@ -29,6 +29,12 @@ from mlp import MLP
 from reward import reward_amp_cls
 from utils import clean_sequences, load_esm, load_pretrained_progen_model
 
+# Import wandb (optional)
+try:
+    import wandb
+except ImportError:
+    wandb = None
+
 # Add personalization imports
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
@@ -537,6 +543,8 @@ class DistributedUltraLowMemoryGRPOTrainer:
         return groups
 
     def generate_candidates_ultra_memory_efficient(self, prompts, user_context=None):
+        if self.is_main_process:
+            print(f"[generate] Starting generation for {len(prompts)} prompts", flush=True)
         bad_ids = [self.tok.encode(w) for w in ["B", "O", "U", "X", "Z"]]
         gen_cfg = dict(
             max_new_tokens=CFG.max_new_tokens, 
@@ -562,7 +570,9 @@ class DistributedUltraLowMemoryGRPOTrainer:
         torch.set_grad_enabled(False)
         
         try:
-            for prompt in prompts:
+            for prompt_idx, prompt in enumerate(prompts):
+                if self.is_main_process and prompt_idx % 5 == 0:
+                    print(f"[generate] Prompt {prompt_idx+1}/{len(prompts)}", flush=True)
                 candidates = []
                 for cand_idx in range(CFG.num_candidates):
                     try:
@@ -648,15 +658,20 @@ def train_worker(rank, world_size, cfg):
         device = torch.device(f"cuda:{rank}")
         
         if rank == 0 and cfg.use_wandb:
-            try:
-                wandb.init(
-                    project=cfg.tracker_project_name,
-                    name=cfg.exp_name,
-                    config=asdict(cfg),
-                    entity=cfg.wandb_entity,
-                )
-            except Exception as e:
-                print(f"Warning: Could not initialize wandb: {e}")
+            if wandb is None:
+                print("Warning: wandb not installed, skipping wandb logging", flush=True)
+            else:
+                try:
+                    print("Initializing wandb...", flush=True)
+                    wandb.init(
+                        project=cfg.tracker_project_name,
+                        name=cfg.exp_name,
+                        config=asdict(cfg),
+                        entity=cfg.wandb_entity,
+                    )
+                    print("Wandb initialized successfully!", flush=True)
+                except Exception as e:
+                    print(f"Warning: Could not initialize wandb: {e}", flush=True)
 
         if rank == 0:
             print("Loading model...", flush=True)
@@ -767,24 +782,30 @@ def train_worker(rank, world_size, cfg):
             print(f"Dataloader created. Starting training loop...", flush=True)
         for epoch in range(cfg.epochs):
             if rank == 0:
-                print(f"\nEpoch {epoch+1}/{cfg.epochs}")
+                print(f"\n{'='*50}", flush=True)
+                print(f"Epoch {epoch+1}/{cfg.epochs}", flush=True)
+                print(f"{'='*50}", flush=True)
             dataloader.sampler.set_epoch(epoch)
             for batch_idx, batch in enumerate(dataloader):
                 if rank == 0:
-                    print(f"\nBatch {batch_idx+1}")
+                    print(f"\n--- Batch {batch_idx+1} ---", flush=True)
                 
                 # Select persona for this batch if using personalization
                 if cfg.use_personalization:
+                    if rank == 0:
+                        print(f"Selecting persona...", flush=True)
                     current_persona = get_next_persona()
                     reward_fn = make_reward_fn(current_persona)
                     user_context = current_persona.weights.to(device)
                     
                     if rank == 0:
-                        print(f"Using persona: {current_persona.name}")
+                        print(f"Using persona: {current_persona.name}", flush=True)
                 else:
                     user_context = None
                 
                 try:
+                    if rank == 0:
+                        print(f"Processing batch data...", flush=True)
                     if isinstance(batch, dict):
                         if "input_ids" in batch:
                             prompts = batch["input_ids"]
@@ -798,11 +819,17 @@ def train_worker(rank, world_size, cfg):
                     prompts = [prompts[i] for i in range(prompts.size(0))]
                     prompts = trainer.truncate_sequences(prompts)
                     
+                    if rank == 0:
+                        print(f"Generating {CFG.num_candidates} candidates for {len(prompts)} prompts...", flush=True)
+                    
                     # Generate with user context
                     candidates_list = trainer.generate_candidates_ultra_memory_efficient(
                         prompts, 
                         user_context=user_context
                     )
+                    
+                    if rank == 0:
+                        print(f"Generation complete. Creating GRPO groups...", flush=True)
                     
                     groups = trainer.create_grpo_groups(prompts, candidates_list, reward_fn)
                     if not groups:
