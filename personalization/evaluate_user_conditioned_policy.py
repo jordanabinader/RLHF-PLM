@@ -266,7 +266,10 @@ def main():
             print(f"     Mean Reward: {stats['mean_reward']:.3f}")
             print(f"     Uniqueness: {stats['uniqueness']:.2%}")
         except Exception as e:
-            print(f"     ✗ Error evaluating properties: {e}")
+            print(f"     ✗ Error evaluating properties: {type(e).__name__}: {e}")
+            import traceback
+            print("     Traceback:")
+            traceback.print_exc()
             continue
     
     # Create summary DataFrame

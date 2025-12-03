@@ -206,15 +206,29 @@ class UnifiedPropertyFunction:
         
         # Ensure all tensors are the same length
         batch_size = len(sequences)
-        assert p_act.shape[0] == batch_size, f"Activity shape mismatch: {p_act.shape} vs {batch_size}"
-        assert p_tox.shape[0] == batch_size, f"Toxicity shape mismatch: {p_tox.shape} vs {batch_size}"
-        assert p_stab.shape[0] == batch_size, f"Stability shape mismatch: {p_stab.shape} vs {batch_size}"
-        assert p_len.shape[0] == batch_size, f"Length shape mismatch: {p_len.shape} vs {batch_size}"
+        
+        # Validate shapes with better error messages
+        if p_act.shape[0] != batch_size:
+            raise ValueError(f"Activity head returned wrong batch size: {p_act.shape} (expected {batch_size})")
+        if p_tox.shape[0] != batch_size:
+            raise ValueError(f"Toxicity head returned wrong batch size: {p_tox.shape} (expected {batch_size})")
+        if p_stab.shape[0] != batch_size:
+            raise ValueError(f"Stability head returned wrong batch size: {p_stab.shape} (expected {batch_size})")
+        if p_len.shape[0] != batch_size:
+            raise ValueError(f"Length calculation wrong: {p_len.shape} (expected {batch_size})")
         
         # 6. Stack into property vector [p_act, p_tox, p_stab, p_len]
-        properties = torch.stack([p_act, p_tox, p_stab, p_len], dim=1)
+        try:
+            properties = torch.stack([p_act, p_tox, p_stab, p_len], dim=1)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to stack properties. Shapes: "
+                f"p_act={p_act.shape}, p_tox={p_tox.shape}, "
+                f"p_stab={p_stab.shape}, p_len={p_len.shape}. Error: {e}"
+            )
         
-        assert properties.shape == (batch_size, 4), f"Final properties shape mismatch: {properties.shape} vs ({batch_size}, 4)"
+        if properties.shape != (batch_size, 4):
+            raise ValueError(f"Final properties shape wrong: {properties.shape} (expected ({batch_size}, 4))")
         
         return properties
     
