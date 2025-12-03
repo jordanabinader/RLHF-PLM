@@ -165,3 +165,4 @@ amp_design/progen2hf/progen2-small/
 evaluation_results/
 grpo_runs/
 slurm/test_run/
+*.md

@@ -91,11 +91,13 @@ EVAL_DIR="evaluation_results/user_conditioned_multi"
 # Training parameters
 EPOCHS=20
 BATCH_SIZE=32
-STEPS=100
+STEPS=150  # Increased from 100 to allow more stable convergence
 LR=2e-5
 SAVE_EVERY=25
 REWARD_PENALTY=-10.0
 MIN_CHARGE=0.0
+BETA=0.3  # Increased from 0.1 to prevent KL divergence explosion
+KL_CLIP_VALUE=0.1  # Increased from 0.0 to clip extreme divergence
 
 echo ""
 echo "========================================"
@@ -125,6 +127,8 @@ python  amp_design/grpo.py \
   --batch-size $BATCH_SIZE \
   --steps $STEPS \
   --lr $LR \
+  --beta $BETA \
+  --kl-clip-value $KL_CLIP_VALUE \
   --save-every $SAVE_EVERY \
   --reward-penalty $REWARD_PENALTY \
   --min-charge $MIN_CHARGE \

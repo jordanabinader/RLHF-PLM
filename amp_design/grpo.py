@@ -73,12 +73,12 @@ def set_seed(seed: int, rank: int) -> None:
 class TrainingConfig:
     tracker_project_name: str = "ampgen_grpo"
     exp_name: str = "grpo_mix_ddp"
-    steps: int = 100
+    steps: int = 150
     batch_size: int = 16 * 8
     epochs: int = 30
-    beta: float = 0.1
+    beta: float = 0.3  # Increased from 0.1 to prevent KL divergence explosion
     kl_clip: bool = True
-    kl_clip_value: float = 0.0
+    kl_clip_value: float = 0.1  # Increased from 0.0 to clip extreme divergence
     ranking_loss_weight: float = 0.1
     entropy_weight: float = 0.01
     advantage_normalization: bool = True
@@ -132,6 +132,7 @@ def parse_args() -> None:
     parser.add_argument("--epochs", type=int, default=defaults.epochs, help="Number of epochs.")
     parser.add_argument("--lr", type=float, default=defaults.lr, help="Learning rate.")
     parser.add_argument("--beta", type=float, default=defaults.beta, help="KL penalty weight.")
+    parser.add_argument("--kl-clip-value", type=float, default=defaults.kl_clip_value, help="KL divergence clipping threshold.")
     parser.add_argument("--group-size", type=int, default=defaults.group_size, help="Samples per GRPO group.")
     parser.add_argument("--num-candidates", type=int, default=defaults.num_candidates, help="Candidates per prompt.")
     parser.add_argument("--max-new-tokens", type=int, default=defaults.max_new_tokens, help="Max tokens to generate.")
