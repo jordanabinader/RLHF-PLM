@@ -164,12 +164,20 @@ class UnifiedPropertyFunction:
         p_act = self.activity_head(sequences, device=self.device)
         if p_act.dim() == 0:
             p_act = p_act.unsqueeze(0)
+        elif p_act.dim() > 1:
+            p_act = p_act.squeeze()  # Remove extra dimensions
+        if p_act.dim() != 1:
+            raise ValueError(f"Activity head returned unexpected shape: {p_act.shape}, expected 1D")
         
         # 3. Compute stability scores p_stab
         # Note: StabilityHead uses EsmTherm model internally (sequences → stability)
         p_stab = self.stability_head(sequences, device=self.device)
         if p_stab.dim() == 0:
             p_stab = p_stab.unsqueeze(0)
+        elif p_stab.dim() > 1:
+            p_stab = p_stab.squeeze()  # Remove extra dimensions
+        if p_stab.dim() != 1:
+            raise ValueError(f"Stability head returned unexpected shape: {p_stab.shape}, expected 1D")
         
         # 4. Compute toxicity scores p_tox
         # For toxicity, we need domain vectors. If domain_encoder is available, use it.
@@ -187,13 +195,26 @@ class UnifiedPropertyFunction:
         p_tox = self.toxicity_head(esm_embeddings, domain_vectors)
         if p_tox.dim() == 0:
             p_tox = p_tox.unsqueeze(0)
+        elif p_tox.dim() > 1:
+            p_tox = p_tox.squeeze()  # Remove extra dimensions
+        if p_tox.dim() != 1:
+            raise ValueError(f"Toxicity head returned unexpected shape: {p_tox.shape}, expected 1D")
         
         # 5. Compute normalized length p_len
         lengths = torch.tensor([len(seq) for seq in sequences], device=self.device, dtype=torch.float32)
         p_len = lengths / self.max_length
         
+        # Ensure all tensors are the same length
+        batch_size = len(sequences)
+        assert p_act.shape[0] == batch_size, f"Activity shape mismatch: {p_act.shape} vs {batch_size}"
+        assert p_tox.shape[0] == batch_size, f"Toxicity shape mismatch: {p_tox.shape} vs {batch_size}"
+        assert p_stab.shape[0] == batch_size, f"Stability shape mismatch: {p_stab.shape} vs {batch_size}"
+        assert p_len.shape[0] == batch_size, f"Length shape mismatch: {p_len.shape} vs {batch_size}"
+        
         # 6. Stack into property vector [p_act, p_tox, p_stab, p_len]
         properties = torch.stack([p_act, p_tox, p_stab, p_len], dim=1)
+        
+        assert properties.shape == (batch_size, 4), f"Final properties shape mismatch: {properties.shape} vs ({batch_size}, 4)"
         
         return properties
     
