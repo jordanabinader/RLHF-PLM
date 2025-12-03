@@ -20,7 +20,10 @@
 mkdir -p logs
 # Enable wandb (comment this line to enable wandb logging)
 # export WANDB_MODE=disabled
-
+export WANDB_MODE=online
+export WANDB_PROJECT="RLHF-PLM"
+export WANDB_LOG_MODEL="false"  # Don't upload model checkpoints to wandb
+export WANDB_WATCH="false"   
 # 1. Load the base system python
 module load miniforge
 
@@ -45,19 +48,18 @@ python -m pip install --upgrade pip
 # Instead, we use --ignore-installed to force installing a fresh copy 
 # into your local venv, shadowing the system version.
 
-echo "Installing dependencies..."
-python -m pip install --upgrade --ignore-installed --no-cache-dir \
-    "torch>=2.0" \
-    "transformers==4.45.2" \
-    "tokenizers==0.20.0" \
-    "peft==0.10.0" \
-    "numpy" \
-    "pandas" \
-    "scipy" \
-    "scikit-learn" \
-    "fair-esm" \
-    "biopython" \
-    "wandb" \
+# echo "Installing dependencies..."
+# python -m pip install --upgrade --ignore-installed --no-cache-dir \
+#     "torch>=2.0" \
+#     "transformers==4.45.2" \
+#     "tokenizers==0.20.0" \
+#     "peft==0.10.0" \
+#     "numpy" \
+#     "pandas" \
+#     "scipy" \
+#     "scikit-learn" \
+#     "fair-esm" \
+#     "biopython" \
 
 echo "Node: $(hostname)"
 echo "GPUs visible to this job:"
