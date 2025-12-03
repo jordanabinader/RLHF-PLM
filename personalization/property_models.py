@@ -47,21 +47,27 @@ class ActivityHead(nn.Module):
             raise FileNotFoundError(f"Activity classifier not found at {checkpoint_path}")
         
         # Load ESM2-8M model (320-dim hidden size)
+        print(f"[ActivityHead] Loading internal ESM2-8M model...", flush=True)
         import esm
         self.esm_model, self.alphabet = esm.pretrained.esm2_t6_8M_UR50D()
+        print(f"[ActivityHead] ESM model loaded, getting batch converter...", flush=True)
         self.batch_converter = self.alphabet.get_batch_converter()
         
         # Create the MLP architecture (must match checkpoint!)
+        print(f"[ActivityHead] Creating MLP classifier...", flush=True)
         self.classifier = AMPClassifier(input_dim=320, hidden_dim=128, output_dim=1)
         
         # Load the state_dict
+        print(f"[ActivityHead] Loading checkpoint weights...", flush=True)
         state_dict = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         self.classifier.load_state_dict(state_dict)
         self.classifier.eval()
         
         # Freeze parameters - this is a fixed property predictor
+        print(f"[ActivityHead] Freezing parameters...", flush=True)
         for param in self.esm_model.parameters():
             param.requires_grad = False
+        print(f"[ActivityHead] Initialization complete", flush=True)
         for param in self.classifier.parameters():
             param.requires_grad = False
     
@@ -289,14 +295,18 @@ class StabilityHead(nn.Module):
 
 def load_activity_head(checkpoint_path: str, device: str = "cuda") -> ActivityHead:
     """Load pre-trained activity head (loads its own ESM2-8M model internally)."""
+    print(f"[load_activity_head] Loading from {checkpoint_path}...", flush=True)
     model = ActivityHead(checkpoint_path)
+    print(f"[load_activity_head] Moving to {device}...", flush=True)
     model = model.to(device)
     model.eval()
+    print(f"[load_activity_head] Done", flush=True)
     return model
 
 
 def load_toxicity_head(checkpoint_path: str, device: str = "cuda") -> ToxicityHead:
     """Load trained toxicity head."""
+    print(f"[load_toxicity_head] Loading from {checkpoint_path}...", flush=True)
     model = ToxicityHead()
     checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     
@@ -308,6 +318,7 @@ def load_toxicity_head(checkpoint_path: str, device: str = "cuda") -> ToxicityHe
     
     model = model.to(device)
     model.eval()
+    print(f"[load_toxicity_head] Done", flush=True)
     return model
 
 
@@ -317,6 +328,7 @@ def load_stability_head(checkpoint_path: str, device: str = "cuda") -> Stability
     
     Handles both EsmTherm checkpoints and placeholder models.
     """
+    print(f"[load_stability_head] Loading from {checkpoint_path}...", flush=True)
     checkpoint_path = Path(checkpoint_path)
     
     # Check if it's an EsmTherm checkpoint
@@ -324,14 +336,17 @@ def load_stability_head(checkpoint_path: str, device: str = "cuda") -> Stability
         ckpt = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         if ckpt.get('model_type') == 'esmtherm_full':
             # Load EsmTherm model
+            print(f"[load_stability_head] Using EsmTherm model", flush=True)
             model = StabilityHead(checkpoint_path=str(checkpoint_path), use_esmtherm=True)
             model = model.to(device)
             model.eval()
+            print(f"[load_stability_head] Done", flush=True)
             return model
     
     # Fallback: load placeholder model
-    print("Warning: Loading placeholder stability head (not EsmTherm)")
+    print("Warning: Loading placeholder stability head (not EsmTherm)", flush=True)
     model = StabilityHead(use_esmtherm=False)
+    print(f"[load_stability_head] Done (placeholder)", flush=True)
     
     # Try to load state dict if available
     if checkpoint_path.exists():
