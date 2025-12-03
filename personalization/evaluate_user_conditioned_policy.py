@@ -23,7 +23,7 @@ from personalization.unified_property_fn import create_unified_property_function
 from personalization.personas import get_persona, list_personas, compute_personalized_reward
 from personalization.validity import validate_sequences, get_validity_stats
 from personalization.hybrid_reward import create_hybrid_reward_fn
-from amp_design.utils import load_pretrained_progen_model
+from amp_design.utils import load_pretrained_progen_model, clean_sequences
 
 
 def generate_sequences_for_persona(
@@ -78,10 +78,13 @@ def generate_sequences_for_persona(
         # Decode sequences
         for seq_ids in outputs:
             seq = tokenizer.decode(seq_ids, skip_special_tokens=True)
-            # Clean up
+            # Remove special tokens
             seq = seq.replace("<|bos|>", "").replace("<|eos|>", "").strip()
             if seq:
                 sequences.append(seq)
+    
+    # Clean all sequences (remove non-alphabetic characters, uppercase)
+    sequences = clean_sequences(sequences)
     
     return sequences[:num_sequences]
 
