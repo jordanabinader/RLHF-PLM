@@ -94,9 +94,9 @@ BATCH_SIZE=32
 STEPS=150  # Increased from 100 to allow more stable convergence
 LR=2e-5
 SAVE_EVERY=25
-REWARD_PENALTY=-10.0
+REWARD_PENALTY=-0.5
 MIN_CHARGE=0.0
-BETA=0.3  # Increased from 0.1 to prevent KL divergence explosion
+BETA=0.15  # Increased from 0.1 to prevent KL divergence explosion
 KL_CLIP_VALUE=0.1  # Increased from 0.0 to clip extreme divergence
 
 echo ""
@@ -168,8 +168,7 @@ python  personalization/evaluate_user_conditioned_policy.py \
   --stability-checkpoint "$STABILITY_CHECKPOINT" \
   --num-sequences 200 \
   --output-dir "$EVAL_DIR" \
-  --device cuda \
-  --esm-mode "650M"
+  --device cuda
 
 EVAL_EXIT_CODE=$?
 

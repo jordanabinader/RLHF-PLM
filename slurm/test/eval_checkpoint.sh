@@ -44,7 +44,7 @@ python -c "import torch; print(f'torch: {torch.__version__}')"
 
 # Use absolute paths
 REPO_ROOT="/orcd/home/002/jordancn/RLHF-PLM"  # Adjust to your actual path
-CHECKPOINT="${REPO_ROOT}/grpo_runs/user_conditioned_multi/checkpoint_step_50"
+CHECKPOINT="${REPO_ROOT}/grpo_runs/collapse_r0/checkpoint_final"
 TOKENIZER_PATH="${REPO_ROOT}/amp_design/progen2hf/progen2-small"
 ACTIVITY_CHECKPOINT="${REPO_ROOT}/amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/toxicity_head.pth"
