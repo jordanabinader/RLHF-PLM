@@ -26,10 +26,13 @@ from pathlib import Path
 from typing import List, Dict
 from tqdm import tqdm
 
-# Add repo root to path for imports
+# Add repo root and amp_design to path for imports
 REPO_ROOT = Path(__file__).parent.parent.resolve()
+AMP_DESIGN_DIR = REPO_ROOT / "amp_design"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+if str(AMP_DESIGN_DIR) not in sys.path:
+    sys.path.insert(0, str(AMP_DESIGN_DIR))
 
 from personalization.unified_property_fn import create_unified_property_function
 
@@ -59,6 +62,14 @@ def generate_representative_sequences(
     
     print(f"Loading base model {model_name}...")
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    
+    # Set pad_token if not already set (required for batched generation)
+    if tokenizer.pad_token is None:
+        if tokenizer.eos_token is not None:
+            tokenizer.pad_token = tokenizer.eos_token
+        else:
+            tokenizer.add_special_tokens({'pad_token': '<|pad|>'})
+    
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,

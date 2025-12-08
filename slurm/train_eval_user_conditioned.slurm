@@ -80,25 +80,31 @@ mkdir -p evaluation_results/user_conditioned_multi
 # Configuration
 # Configuration - Use absolute paths
 REPO_ROOT="/orcd/home/002/jordancn/RLHF-PLM"  # Adjust to your actual path
+
+# Change to repo root directory for correct imports
+cd "$REPO_ROOT"
+export PYTHONPATH="$REPO_ROOT:$REPO_ROOT/amp_design:$PYTHONPATH"
+
 BASE_MODEL_PATH="${REPO_ROOT}/amp_design/progen2hf/progen2-small"
 TOKENIZER_PATH="${REPO_ROOT}/amp_design/progen2hf/progen2-small"
+LORA_CHECKPOINT="${REPO_ROOT}/amp_design/grpo_ckpt"
 ACTIVITY_CHECKPOINT="${REPO_ROOT}/amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/toxicity_head.pth"
 STABILITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/stability_head.pth"
 NORMALIZATION_STATS="${REPO_ROOT}/personalization/checkpoints/property_normalization.json"
-OUTPUT_DIR="grpo_runs/user_conditioned_multi"
-EVAL_DIR="evaluation_results/user_conditioned_multi"
+OUTPUT_DIR="grpo_runs/user_conditioned_from_pretrained"
+EVAL_DIR="evaluation_results/user_conditioned_from_pretrained"
 
-# Training parameters
+# Training parameters (adjusted for warm start from pre-trained checkpoint)
 EPOCHS=1
 BATCH_SIZE=32
-STEPS=150  # Increased from 100 to allow more stable convergence
-LR=2e-5
+STEPS=150
+LR=1e-5  # Lower LR for fine-tuning from checkpoint
 SAVE_EVERY=25
 REWARD_PENALTY=-0.5
 MIN_CHARGE=0.0
-BETA=0.15  # Increased from 0.1 to prevent KL divergence explosion
-KL_CLIP_VALUE=0.1  # Increased from 0.0 to clip extreme divergence
+BETA=0.2  # Slightly higher for warm start
+KL_CLIP_VALUE=0.1
 
 echo ""
 echo "========================================"
@@ -118,6 +124,7 @@ export PYTHONPATH="${REPO_ROOT}/amp_design:${PYTHONPATH}"
 python  amp_design/grpo.py \
   --base-model-path "$BASE_MODEL_PATH" \
   --tokenizer-path "$TOKENIZER_PATH" \
+  --lora-checkpoint "$LORA_CHECKPOINT" \
   --classifier-checkpoint "$ACTIVITY_CHECKPOINT" \
   --toxicity-checkpoint "$TOXICITY_CHECKPOINT" \
   --stability-checkpoint "$STABILITY_CHECKPOINT" \
@@ -136,7 +143,7 @@ python  amp_design/grpo.py \
   --min-charge $MIN_CHARGE \
   --esm-mode "650M" \
   --tracker-project-name "user_conditioned_grpo" \
-  --exp-name "multi_persona_${SLURM_JOB_ID}"
+  --exp-name "from_pretrained_${SLURM_JOB_ID}"
 
 TRAIN_EXIT_CODE=$?
 
@@ -170,7 +177,8 @@ python  personalization/evaluate_user_conditioned_policy.py \
   --stability-checkpoint "$STABILITY_CHECKPOINT" \
   --num-sequences 200 \
   --output-dir "$EVAL_DIR" \
-  --device cuda
+  --device cuda \
+  --esm-mode "650M"
 
 EVAL_EXIT_CODE=$?
 

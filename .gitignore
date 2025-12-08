@@ -166,3 +166,4 @@ evaluation_results/
 grpo_runs/
 slurm/test_run/
 *.md
+amp_design/grpo_ckpt/

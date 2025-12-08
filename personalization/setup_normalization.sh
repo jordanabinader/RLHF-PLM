@@ -13,16 +13,7 @@ echo "calculate mean/std for all properties (activity, toxicity,"
 echo "stability, length)."
 echo ""
 
-# Get the directory where this script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
-
-# Change to repo root
-cd "$REPO_ROOT"
-echo "Working directory: $REPO_ROOT"
-echo ""
-
-# Set paths (relative to repo root)
+# Set paths
 ACTIVITY_CHECKPOINT="amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="personalization/checkpoints/toxicity_head.pth"
 STABILITY_CHECKPOINT="personalization/checkpoints/stability_head.pth"
@@ -70,8 +61,17 @@ echo "Starting statistics calculation..."
 echo "This may take 10-20 minutes depending on your GPU."
 echo ""
 
-# Set PYTHONPATH to ensure imports work
-export PYTHONPATH="$REPO_ROOT:$PYTHONPATH"
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
+# Change to repo root for correct imports
+cd "$REPO_ROOT"
+echo "Working directory: $REPO_ROOT"
+echo ""
+
+# Set PYTHONPATH to ensure imports work (include amp_design for progen2hf)
+export PYTHONPATH="$REPO_ROOT:$REPO_ROOT/amp_design:$PYTHONPATH"
 
 # Run the calculation script
 python personalization/calculate_normalization_stats.py \

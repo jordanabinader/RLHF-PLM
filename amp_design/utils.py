@@ -5,7 +5,7 @@ from typing import Dict, Iterable, List, Sequence, Tuple
 
 import esm
 import torch
-from peft import LoraConfig, TaskType, get_peft_model
+from peft import LoraConfig, TaskType, get_peft_model, PeftModel
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerFast
 import os
 from progen2hf.models import ProGenConfig, ProGenForCausalLM
@@ -137,22 +137,52 @@ def load_pretrained_progen_model(
     )
     print("[utils] Base model loaded. Setting up LoRA...", flush=True)
 
-    peft_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,
-        inference_mode=inference_mode,
-        r=lora_r,
-        lora_alpha=lora_alpha,
-        lora_dropout=lora_dropout,
-        target_modules=list(target_modules),
-    )
-
-    print("[utils] Applying PEFT config...", flush=True)
-    model = get_peft_model(model, peft_config)
-
     if lora_checkpoint:
-        print(f"[utils] Loading LoRA checkpoint from {lora_checkpoint}...", flush=True)
-        state = torch.load(Path(lora_checkpoint), map_location="cpu")
-        model.load_state_dict(rename(state), strict=False)
+        # Load existing PEFT checkpoint (modern format with adapter_config.json)
+        checkpoint_path = Path(lora_checkpoint)
+        
+        # Check if it's a directory with PEFT format (adapter_config.json exists)
+        if checkpoint_path.is_dir() and (checkpoint_path / "adapter_config.json").exists():
+            print(f"[utils] Loading PEFT checkpoint from directory: {lora_checkpoint}...", flush=True)
+            model = PeftModel.from_pretrained(
+                model, 
+                lora_checkpoint,
+                is_trainable=not inference_mode
+            )
+        # Check if it's a single .pth file (legacy format)
+        elif checkpoint_path.is_file() and checkpoint_path.suffix == ".pth":
+            print(f"[utils] Loading legacy LoRA checkpoint from file: {lora_checkpoint}...", flush=True)
+            # Create LoRA config first
+            peft_config = LoraConfig(
+                task_type=TaskType.CAUSAL_LM,
+                inference_mode=inference_mode,
+                r=lora_r,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+                target_modules=list(target_modules),
+            )
+            model = get_peft_model(model, peft_config)
+            # Load state dict
+            state = torch.load(checkpoint_path, map_location="cpu")
+            model.load_state_dict(rename(state), strict=False)
+        else:
+            raise ValueError(
+                f"Invalid LoRA checkpoint: {lora_checkpoint}. "
+                f"Expected either a directory with adapter_config.json or a .pth file."
+            )
+    else:
+        # Create new LoRA adapter from scratch
+        print("[utils] Creating new LoRA adapter from scratch...", flush=True)
+        peft_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            inference_mode=inference_mode,
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            target_modules=list(target_modules),
+        )
+        print("[utils] Applying PEFT config...", flush=True)
+        model = get_peft_model(model, peft_config)
 
     print("[utils] Model setup complete, setting to eval mode", flush=True)
     model.eval()
