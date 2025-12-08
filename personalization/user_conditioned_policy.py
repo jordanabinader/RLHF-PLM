@@ -17,7 +17,7 @@ class UserContextProjector(nn.Module):
     into a representation compatible with the policy's hidden states.
     """
     
-    def __init__(self, user_dim: int = 4, hidden_dim: int = 128, output_dim: int = 256):
+    def __init__(self, user_dim: int = 4, hidden_dim: int = 128, output_dim: int = 1024):
         """
         Initialize user context projector.
         
@@ -59,7 +59,7 @@ class UserConditionedPolicyWrapper(nn.Module):
         self, 
         base_policy,
         user_dim: int = 4,
-        projection_dim: int = 256,
+        projection_dim: int = 1024,
     ):
         """
         Initialize user-conditioned policy wrapper.

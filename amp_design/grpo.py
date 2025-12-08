@@ -357,6 +357,13 @@ class DistributedUltraLowMemoryGRPOTrainer:
         if not local_groups:
             return 0.0
 
+        # Extract user_context from first group (should be same across all groups in batch)
+        user_context = None
+        if local_groups and "user_context" in local_groups[0]:
+            user_context_cpu = local_groups[0]["user_context"]
+            if user_context_cpu is not None:
+                user_context = user_context_cpu.to(self.dev)
+
         flat_seqs, flat_rewards, lengths, group_sizes = [], [], [], []
         for g in local_groups:
             q = g["query"].to(self.dev)
@@ -371,7 +378,13 @@ class DistributedUltraLowMemoryGRPOTrainer:
 
         padded = pad_sequence(flat_seqs, batch_first=True,
                             padding_value=self.tok.eos_token_id).to(self.dev)
-        policy_out = self.policy(padded, use_cache=False)
+        
+        # Pass user_context to policy forward call if available
+        # Use .module to bypass DDP wrapper for custom keyword arguments
+        if user_context is not None:
+            policy_out = self.policy.module(padded, user_context=user_context, use_cache=False)
+        else:
+            policy_out = self.policy(padded, use_cache=False)
         logits     = policy_out.logits if not isinstance(policy_out, tuple) else policy_out[0]
 
         with torch.no_grad(), autocast(device_type="cuda"):
@@ -466,7 +479,7 @@ class DistributedUltraLowMemoryGRPOTrainer:
 
         return batch_loss.item()
 
-    def create_grpo_groups(self, queries, candidates_list, reward_fn):
+    def create_grpo_groups(self, queries, candidates_list, reward_fn, user_context=None):
         groups = []
         for q_idx, (query, candidates) in enumerate(zip(queries, candidates_list)):
             valid_candidates = []
@@ -539,7 +552,8 @@ class DistributedUltraLowMemoryGRPOTrainer:
                 "query": query_cpu,
                 "candidates": group_candidates,
                 "rewards": group_rewards,
-                "reward_std": reward_std
+                "reward_std": reward_std,
+                "user_context": user_context.cpu() if user_context is not None else None
             }
             groups.append(group)
         return groups
@@ -833,7 +847,7 @@ def train_worker(rank, world_size, cfg):
                     if rank == 0:
                         print(f"Generation complete. Creating GRPO groups...", flush=True)
                     
-                    groups = trainer.create_grpo_groups(prompts, candidates_list, reward_fn)
+                    groups = trainer.create_grpo_groups(prompts, candidates_list, reward_fn, user_context=user_context)
                     if not groups:
                         if rank == 0:
                             print("Skip. No valid GRPO groups")
