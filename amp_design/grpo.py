@@ -114,6 +114,7 @@ class TrainingConfig:
     stability_checkpoint: Path | None = None
     reward_penalty: float = -10.0
     min_charge: float = 0.0
+    normalization_stats_path: Path | None = None
 
 
 CFG = TrainingConfig()
@@ -161,6 +162,7 @@ def parse_args() -> None:
     parser.add_argument("--stability-checkpoint", type=Path, help="Path to stability head checkpoint")
     parser.add_argument("--reward-penalty", type=float, default=defaults.reward_penalty, help="Penalty for invalid sequences")
     parser.add_argument("--min-charge", type=float, default=defaults.min_charge, help="Minimum net charge for validity")
+    parser.add_argument("--normalization-stats-path", type=Path, help="Path to property normalization statistics JSON")
     args = parser.parse_args()
 
     namespace = vars(args)
@@ -720,6 +722,7 @@ def train_worker(rank, world_size, cfg):
                 stability_checkpoint=cfg.stability_checkpoint,
                 esm_model_size=cfg.esm_mode,
                 device=device,
+                normalization_stats_path=str(cfg.normalization_stats_path) if cfg.normalization_stats_path else None,
             )
             
             if rank == 0:

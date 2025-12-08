@@ -85,6 +85,7 @@ TOKENIZER_PATH="${REPO_ROOT}/amp_design/progen2hf/progen2-small"
 ACTIVITY_CHECKPOINT="${REPO_ROOT}/amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/toxicity_head.pth"
 STABILITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/stability_head.pth"
+NORMALIZATION_STATS="${REPO_ROOT}/personalization/checkpoints/property_normalization.json"
 OUTPUT_DIR="grpo_runs/user_conditioned_multi"
 EVAL_DIR="evaluation_results/user_conditioned_multi"
 
@@ -120,6 +121,7 @@ python  amp_design/grpo.py \
   --classifier-checkpoint "$ACTIVITY_CHECKPOINT" \
   --toxicity-checkpoint "$TOXICITY_CHECKPOINT" \
   --stability-checkpoint "$STABILITY_CHECKPOINT" \
+  --normalization-stats-path "$NORMALIZATION_STATS" \
   --use-personalization \
   --persona-cycle-mode random \
   --output-dir "$OUTPUT_DIR" \

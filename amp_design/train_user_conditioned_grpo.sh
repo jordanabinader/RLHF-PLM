@@ -12,6 +12,7 @@ TOKENIZER_PATH="progen2hf/"
 ACTIVITY_CHECKPOINT="amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="personalization/checkpoints/toxicity_head.pth"
 STABILITY_CHECKPOINT="personalization/checkpoints/stability_head.pth"
+NORMALIZATION_STATS="personalization/checkpoints/property_normalization.json"
 
 # Train with single persona
 echo ""
@@ -22,6 +23,7 @@ python amp_design/grpo.py \
   --classifier-checkpoint "$ACTIVITY_CHECKPOINT" \
   --toxicity-checkpoint "$TOXICITY_CHECKPOINT" \
   --stability-checkpoint "$STABILITY_CHECKPOINT" \
+  --normalization-stats-path "$NORMALIZATION_STATS" \
   --use-personalization \
   --persona-name BalancedDesigner \
   --persona-cycle-mode single \
@@ -43,6 +45,7 @@ python amp_design/grpo.py \
   --classifier-checkpoint "$ACTIVITY_CHECKPOINT" \
   --toxicity-checkpoint "$TOXICITY_CHECKPOINT" \
   --stability-checkpoint "$STABILITY_CHECKPOINT" \
+  --normalization-stats-path "$NORMALIZATION_STATS" \
   --use-personalization \
   --persona-cycle-mode random \
   --output-dir grpo_runs/user_conditioned_multi \
