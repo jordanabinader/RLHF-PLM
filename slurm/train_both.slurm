@@ -48,9 +48,6 @@ mkdir -p logs
 # ============================================================================
 # Step 1: Train Toxicity Head
 # ============================================================================
-# Note: Toxicity model is trained with zero domain vectors to match inference
-# This is intentional - domain annotations are not available at inference time
-
 echo "========================================================================"
 echo "Step 1/2: Training Toxicity Head"
 echo "========================================================================"

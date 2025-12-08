@@ -91,12 +91,12 @@ class ToxicityDataset(Dataset):
     """
     Dataset for toxicity prediction.
     
-    Loads sequences and labels from ToxDL2 format.
+    Loads sequences and labels from ToxDL2 .domain format.
     Uses zero domain vectors to match inference conditions.
     """
     def __init__(
         self,
-        fasta_path: Path,
+        domain_path: Path,
         esm_model,
         batch_converter,
         device: str = "cuda",
@@ -111,44 +111,63 @@ class ToxicityDataset(Dataset):
         self.labels = []
         self.names = []
         
-        print(f"Loading data from {fasta_path}...")
-        self._load_data(fasta_path)
+        print(f"Loading data from {domain_path}...")
+        self._load_data(domain_path)
         
-        print(f"Loaded {len(self)} samples (training with zero domain vectors)")
+        # Verify label distribution
+        toxic_count = sum(self.labels)
+        total_count = len(self.labels)
+        toxic_ratio = toxic_count / total_count if total_count > 0 else 0
+        print(f"Loaded {total_count} samples: {toxic_count} toxic ({toxic_ratio:.1%}), "
+              f"{total_count - toxic_count} non-toxic ({1-toxic_ratio:.1%})")
+        print(f"Training with zero domain vectors to match inference conditions")
     
-    def _load_data(self, fasta_path: Path):
-        """Load sequences and labels from FASTA file."""
-        with open(fasta_path, 'r') as f:
+    def _load_data(self, domain_path: Path):
+        """Load sequences and labels from ToxDL2 .domain format.
+        
+        Format:
+            >ID
+            SEQUENCE
+            LABEL (0 or 1)
+            DOMAIN_VECTOR (comma-separated, ignored)
+        """
+        with open(domain_path, 'r') as f:
             lines = f.readlines()
         
         current_name = None
         current_seq = None
+        current_label = None
         
         for line in lines:
             line = line.strip()
             
             if line.startswith('>'):
                 # Save previous entry if complete
-                if current_name and current_seq:
+                if current_name and current_seq and current_label is not None:
                     self.names.append(current_name)
                     self.sequences.append(current_seq)
-                    # All sequences in training data are toxic (label=1)
-                    # For non-toxic, you'd need to load from a different source
-                    self.labels.append(1)
+                    self.labels.append(current_label)
                 
                 # Start new entry
                 current_name = line[1:]
                 current_seq = None
+                current_label = None
             
             elif sum([char in AMINOACID for char in line]) == len(line) and len(line) > 0:
-                # This is the sequence
+                # This is the sequence (2nd line of block)
                 current_seq = line
+            
+            elif len(line) == 1 and line in ['0', '1']:
+                # This is the label (3rd line of block)
+                current_label = int(line)
+            
+            # Ignore domain vector line (4th line) - we use zero vectors at inference
         
         # Save last entry
-        if current_name and current_seq:
+        if current_name and current_seq and current_label is not None:
             self.names.append(current_name)
             self.sequences.append(current_seq)
-            self.labels.append(1)
+            self.labels.append(current_label)
     
     def __len__(self):
         return len(self.sequences)
@@ -246,25 +265,25 @@ def train_toxicity_model(
     
     # Load datasets
     print("\nLoading datasets...")
-    print("Note: Training toxicity model with zero domain vectors")
+    print("Note: Loading labels from .domain files but using zero domain vectors as features")
     print("This matches inference conditions (no domain annotation available)")
     
     train_dataset = ToxicityDataset(
-        fasta_path=data_dir / "protein_sequences" / "train.fasta",
+        domain_path=data_dir / "domain_data" / "train.domain",
         esm_model=protein_model,
         batch_converter=batch_converter,
         device=device,
     )
     
     val_dataset = ToxicityDataset(
-        fasta_path=data_dir / "protein_sequences" / "valid.fasta",
+        domain_path=data_dir / "domain_data" / "valid.domain",
         esm_model=protein_model,
         batch_converter=batch_converter,
         device=device,
     )
     
     test_dataset = ToxicityDataset(
-        fasta_path=data_dir / "protein_sequences" / "test.fasta",
+        domain_path=data_dir / "domain_data" / "test.domain",
         esm_model=protein_model,
         batch_converter=batch_converter,
         device=device,
