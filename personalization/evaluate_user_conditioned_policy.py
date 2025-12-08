@@ -23,6 +23,7 @@ from personalization.unified_property_fn import create_unified_property_function
 from personalization.personas import get_persona, list_personas, compute_personalized_reward
 from personalization.validity import validate_sequences, get_validity_stats
 from personalization.hybrid_reward import create_hybrid_reward_fn
+from personalization.user_conditioned_policy import UserConditionedPolicyWrapper
 from amp_design.utils import load_pretrained_progen_model, clean_sequences
 
 
@@ -52,8 +53,8 @@ def generate_sequences_for_persona(
         
         with torch.no_grad():
             try:
-                if hasattr(policy, 'generate') and hasattr(policy, 'user_projector'):
-                    # User-conditioned policy
+                if hasattr(policy, 'user_projector'):
+                    # User-conditioned policy - pass user_context
                     outputs = policy.generate(
                         batch_prompts,
                         user_context=user_context,
@@ -63,7 +64,8 @@ def generate_sequences_for_persona(
                         temperature=0.8,
                     )
                 else:
-                    # Standard policy
+                    # Standard policy - user_context will be ignored
+                    print(f"Warning: Policy doesn't have user_projector, generating without user conditioning")
                     outputs = policy.generate(
                         batch_prompts,
                         max_new_tokens=50,
@@ -73,6 +75,8 @@ def generate_sequences_for_persona(
                     )
             except Exception as e:
                 print(f"Error generating batch {i}: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
         
         # Decode sequences
@@ -198,14 +202,36 @@ def main():
     # Load policy
     print("\n1. Loading policy...")
     try:
-        tokenizer, policy = load_pretrained_progen_model(
+        # Load base policy
+        tokenizer, base_policy = load_pretrained_progen_model(
             str(args.checkpoint),
             str(args.tokenizer_path)
         )
+        
+        # Check if this is a user-conditioned checkpoint
+        projector_path = Path(args.checkpoint) / "user_projector.pt"
+        if projector_path.exists():
+            print("   Detected user-conditioned checkpoint")
+            print("   Wrapping policy with user conditioning...")
+            policy = UserConditionedPolicyWrapper(base_policy)
+            
+            # Load user_projector weights
+            print(f"   Loading user projector from {projector_path}")
+            policy.load_user_projector(str(args.checkpoint))
+            print("   ✓ User-conditioned policy loaded successfully")
+        else:
+            print("   Warning: No user_projector.pt found in checkpoint")
+            print("   This appears to be a standard (non-user-conditioned) checkpoint")
+            print("   Wrapping with user conditioning using randomly initialized projector...")
+            policy = UserConditionedPolicyWrapper(base_policy)
+            print("   Note: Results may not reflect trained user conditioning")
+        
         policy = policy.to(args.device).eval()
         print(f"   ✓ Policy loaded from {args.checkpoint}")
     except Exception as e:
         print(f"   ✗ Error loading policy: {e}")
+        import traceback
+        traceback.print_exc()
         return
     
     # Load property function
