@@ -19,11 +19,17 @@ Usage:
 
 import argparse
 import json
+import sys
 import torch
 import numpy as np
 from pathlib import Path
 from typing import List, Dict
 from tqdm import tqdm
+
+# Add repo root to path for imports
+REPO_ROOT = Path(__file__).parent.parent.resolve()
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from personalization.unified_property_fn import create_unified_property_function
 
