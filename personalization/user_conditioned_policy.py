@@ -49,12 +49,10 @@ class UserContextProjector(nn.Module):
 
 class UserConditionedPolicyWrapper(nn.Module):
     """
-    Wraps a base policy to accept user context during generation.
+    Wraps a base policy to inject user context into generation.
     
-    This is a simplified implementation that stores user context
-    and makes it available to the policy. For full integration,
-    this would be modified to inject user embeddings into the
-    attention mechanism or as prepended tokens.
+    User embeddings are prepended to input token embeddings, allowing
+    the model to condition on user preferences throughout generation.
     """
     
     def __init__(
@@ -79,39 +77,55 @@ class UserConditionedPolicyWrapper(nn.Module):
             output_dim=projection_dim
         )
         self.projection_dim = projection_dim
-        self.current_user_context = None
+    
+    def _get_embedding_layer(self):
+        """Get the base policy's token embedding layer."""
+        if hasattr(self.base_policy, 'transformer'):
+            return self.base_policy.transformer.wte
+        elif hasattr(self.base_policy, 'model'):
+            return self.base_policy.model.get_input_embeddings()
+        else:
+            return self.base_policy.get_input_embeddings()
     
     def forward(self, input_ids, user_context: Optional[torch.Tensor] = None, **kwargs):
         """
-        Forward pass with optional user context.
+        Forward pass with user context injected into embeddings.
         
         Args:
             input_ids: Input token IDs (batch_size, seq_len)
-            user_context: Optional user weights (batch_size, 4) or (4,)
+            user_context: User weights (batch_size, 4) or (4,) - REQUIRED
             **kwargs: Additional arguments for base policy
         
         Returns:
             Model outputs from base policy
         """
-        # If no user context provided, use default (balanced designer)
         if user_context is None:
-            batch_size = input_ids.shape[0]
-            # Default to BalancedDesigner weights: [0.7, -0.5, 0.6, -0.1]
-            user_context = torch.tensor(
-                [0.7, -0.5, 0.6, -0.1], 
-                device=input_ids.device
-            ).repeat(batch_size, 1)
+            raise ValueError(
+                "user_context is required for UserConditionedPolicyWrapper. "
+                "Pass persona weights as user_context parameter."
+            )
         
         # Project user context: (batch_size, 4) -> (batch_size, projection_dim)
+        if user_context.dim() == 1:
+            batch_size = input_ids.shape[0]
+            user_context = user_context.unsqueeze(0).repeat(batch_size, 1)
         user_embed = self.user_projector(user_context)
         
-        # Store user context for generation (accessed during sampling)
-        self.current_user_context = user_embed
+        # Get token embeddings from base policy
+        embed_layer = self._get_embedding_layer()
+        token_embeds = embed_layer(input_ids)
         
-        # Forward through base policy
-        # Note: In a full implementation, user_embed would be injected
-        # into the model's attention or prepended as special tokens
-        return self.base_policy(input_ids, **kwargs)
+        # Prepend user embedding as first "token"
+        user_token = user_embed.unsqueeze(1)  # (batch, 1, projection_dim)
+        combined = torch.cat([user_token, token_embeds], dim=1)
+        
+        # Adjust attention mask to account for prepended user token
+        if 'attention_mask' in kwargs and kwargs['attention_mask'] is not None:
+            mask = kwargs['attention_mask']
+            user_mask = torch.ones((mask.shape[0], 1), device=mask.device, dtype=mask.dtype)
+            kwargs['attention_mask'] = torch.cat([user_mask, mask], dim=1)
+        
+        return self.base_policy(inputs_embeds=combined, **kwargs)
     
     def generate(
         self,
@@ -122,11 +136,11 @@ class UserConditionedPolicyWrapper(nn.Module):
         **generation_kwargs
     ):
         """
-        Generate sequences conditioned on user context.
+        Generate sequences conditioned on user context with length control.
         
         Args:
             input_ids: Starting tokens (batch_size, seq_len)
-            user_context: User weights (batch_size, 4) or (4,)
+            user_context: User weights (batch_size, 4) or (4,) - REQUIRED
             max_length: Maximum total length (deprecated, use max_new_tokens)
             max_new_tokens: Maximum number of new tokens to generate
             **generation_kwargs: Additional args for base_policy.generate()
@@ -134,29 +148,71 @@ class UserConditionedPolicyWrapper(nn.Module):
         Returns:
             Generated token IDs
         """
-        # Handle single user context for batch
+        from personalization.length_logit_bias import LengthLogitBias
+        
+        # Project user context
         if user_context.dim() == 1:
             batch_size = input_ids.shape[0]
             user_context = user_context.unsqueeze(0).repeat(batch_size, 1)
-        
-        # Project user context
         user_embed = self.user_projector(user_context)
         
-        # Store for forward pass
-        self.current_user_context = user_embed
+        # Get token embeddings and prepend user embedding
+        embed_layer = self._get_embedding_layer()
+        token_embeds = embed_layer(input_ids)
+        user_token = user_embed.unsqueeze(1)  # (batch, 1, projection_dim)
+        combined = torch.cat([user_token, token_embeds], dim=1)
         
-        # Generate using base policy
-        # Note: This is a simplified version. For full integration, we would
-        # modify the generation loop to inject user_embed at each step or
-        # prepend it as special tokens that the model can attend to
+        # Adjust attention mask to account for prepended user token
+        if 'attention_mask' in generation_kwargs:
+            mask = generation_kwargs['attention_mask']
+            user_mask = torch.ones((mask.shape[0], 1), device=mask.device, dtype=mask.dtype)
+            generation_kwargs['attention_mask'] = torch.cat([user_mask, mask], dim=1)
         
+        # Add length biasing based on w_len (4th component of user weights)
+        # Formula: target_length = max_length * (1 - w_len)
+        # Negative w_len → longer sequences, positive w_len → shorter sequences
         gen_args = generation_kwargs.copy()
         if max_new_tokens is not None:
+            base_length = max_new_tokens
             gen_args['max_new_tokens'] = max_new_tokens
         elif max_length is not None:
+            base_length = max_length
             gen_args['max_length'] = max_length
+        else:
+            base_length = 50  # Default
+            gen_args['max_new_tokens'] = 50
         
-        return self.base_policy.generate(input_ids, **gen_args)
+        # Get tokenizer for EOS token (try multiple sources)
+        tokenizer = None
+        if hasattr(self, 'tok'):
+            tokenizer = self.tok
+        elif hasattr(self.base_policy, 'config') and hasattr(self.base_policy.config, 'eos_token_id'):
+            # Create minimal tokenizer-like object
+            class MinimalTokenizer:
+                def __init__(self, eos_id):
+                    self.eos_token_id = eos_id
+            tokenizer = MinimalTokenizer(self.base_policy.config.eos_token_id)
+        
+        if tokenizer is not None:
+            w_len = user_context[0, 3].item()  # Length weight
+            target_length = int(base_length * (1 - w_len))
+            target_length = max(10, target_length)  # Ensure minimum length
+            
+            length_bias = LengthLogitBias(
+                eos_token_id=tokenizer.eos_token_id,
+                target_length=target_length,
+                bias_strength=5.0
+            )
+            
+            if 'logits_processor' in gen_args:
+                gen_args['logits_processor'].append(length_bias)
+            else:
+                gen_args['logits_processor'] = [length_bias]
+        
+        # Generate with combined embeddings
+        outputs = self.base_policy.generate(inputs_embeds=combined, **gen_args)
+        
+        return outputs
     
     def save_pretrained(self, save_directory, **kwargs):
         """

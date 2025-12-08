@@ -222,14 +222,15 @@ class StabilityHead(nn.Module):
                                 self.tokenizer = EsmTokenizer.from_pretrained('facebook/esm2_t12_35M_UR50D')
                             print(f"[StabilityHead] EsmTherm loaded successfully")
                         else:
-                            print(f"Warning: EsmTherm source path not found: {source_path}")
-                            self.use_esmtherm = False
-                            self._init_placeholder()
+                            raise FileNotFoundError(
+                                f"EsmTherm source path not found: {source_path}. "
+                                f"Ensure EsmTherm is properly trained and checkpoint exists."
+                            )
                     else:
-                        # Fallback to placeholder
-                        print("Warning: Checkpoint not EsmTherm format, using placeholder")
-                        self.use_esmtherm = False
-                        self._init_placeholder()
+                        raise ValueError(
+                            f"Checkpoint is not in EsmTherm format: {checkpoint_path}. "
+                            f"Expected model_type='esmtherm_full' in checkpoint."
+                        )
                 else:
                     # Direct HF checkpoint directory
                     self.model = EsmForSequenceClassification.from_pretrained(str(checkpoint_path))
@@ -242,77 +243,58 @@ class StabilityHead(nn.Module):
                         param.requires_grad = False
                     
             except Exception as e:
-                print(f"Warning: Failed to load EsmTherm model: {e}")
-                print("Using placeholder stability head instead")
-                self.use_esmtherm = False
-                self._init_placeholder()
+                raise RuntimeError(
+                    f"Failed to load EsmTherm model: {e}. "
+                    f"Ensure stability checkpoint exists and is properly formatted."
+                ) from e
         else:
-            # Placeholder MLP
-            self._init_placeholder()
+            raise ValueError(
+                "Stability checkpoint path is required. "
+                "Use_esmtherm must be True and valid checkpoint_path must be provided."
+            )
     
-    def _init_placeholder(self):
-        """Initialize simple MLP placeholder."""
-        # Simple 2-layer MLP for placeholder
-        self.mlp = nn.Sequential(
-            nn.Linear(1280, 512),
-            nn.ReLU(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, 1),
-        )
-        self.model = None
-        self.tokenizer = None
     
     def forward(self, sequences, device="cuda"):
         """
         Args:
-            sequences: List of protein sequences (strings) OR pre-computed embeddings
+            sequences: List of protein sequences (strings)
             device: Device to run on
         
         Returns:
             p_stab: (batch_size,) tensor with stability scores
         """
-        if self.use_esmtherm and self.model is not None:
-            # Use full EsmTherm model
-            with torch.no_grad():
-                # Move model to device
-                self.model = self.model.to(device)
-                
-                # If sequences is a tensor, it's pre-computed embeddings (backward compat)
-                if isinstance(sequences, torch.Tensor):
-                    # Use placeholder MLP on embeddings
-                    if hasattr(self, 'mlp'):
-                        return self.mlp(sequences.to(device)).squeeze(-1)
-                    else:
-                        # No MLP, return zeros
-                        return torch.zeros(sequences.shape[0], device=device)
-                
-                # Tokenize sequences
-                inputs = self.tokenizer(
-                    sequences,
-                    return_tensors="pt",
-                    padding=True,
-                    truncation=True,
-                    max_length=1024,
-                )
-                inputs = {k: v.to(device) for k, v in inputs.items()}
-                
-                # Get predictions
-                outputs = self.model(**inputs)
-                logits = outputs.logits.squeeze(-1)
-                
-                return logits
-        else:
-            # Placeholder: use simple MLP or return zeros
-            if isinstance(sequences, torch.Tensor):
-                # Pre-computed embeddings
-                if hasattr(self, 'mlp'):
-                    return self.mlp(sequences.to(device)).squeeze(-1)
-                else:
-                    return torch.zeros(sequences.shape[0], device=device)
-            else:
-                # Sequences but no model - return zeros
-                return torch.zeros(len(sequences), device=device)
+        if not self.use_esmtherm or self.model is None:
+            raise RuntimeError(
+                "StabilityHead not properly initialized. "
+                "Ensure valid EsmTherm checkpoint was loaded during initialization."
+            )
+        
+        if isinstance(sequences, torch.Tensor):
+            raise TypeError(
+                "StabilityHead requires sequence strings, not pre-computed embeddings. "
+                "Pass list of protein sequences."
+            )
+        
+        # Use EsmTherm model
+        with torch.no_grad():
+            # Move model to device
+            self.model = self.model.to(device)
+            
+            # Tokenize sequences
+            inputs = self.tokenizer(
+                sequences,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=1024,
+            )
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+            
+            # Get predictions
+            outputs = self.model(**inputs)
+            logits = outputs.logits.squeeze(-1)
+            
+            return logits
 
 
 def load_activity_head(checkpoint_path: str, device: str = "cuda") -> ActivityHead:
@@ -348,54 +330,48 @@ def load_stability_head(checkpoint_path: str, device: str = "cuda") -> Stability
     """
     Load trained stability head.
     
-    Handles both EsmTherm checkpoints and placeholder models.
+    Requires valid EsmTherm checkpoint (either wrapped .pth or HF directory).
     """
     print(f"[load_stability_head] Loading from {checkpoint_path}...", flush=True)
     checkpoint_path = Path(checkpoint_path)
     
-    # Check if it's an EsmTherm checkpoint wrapper
-    if checkpoint_path.exists() and checkpoint_path.suffix == '.pth':
-        try:
-            ckpt = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
-            if ckpt.get('model_type') == 'esmtherm_full':
-                # This is an EsmTherm wrapper - load via StabilityHead
-                print(f"[load_stability_head] Detected EsmTherm wrapper", flush=True)
-                model = StabilityHead(checkpoint_path=str(checkpoint_path), use_esmtherm=True)
-                model = model.to(device)
-                model.eval()
-                print(f"[load_stability_head] Done", flush=True)
-                return model
-        except Exception as e:
-            print(f"[load_stability_head] Error loading as EsmTherm: {e}", flush=True)
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(
+            f"Stability checkpoint not found: {checkpoint_path}. "
+            f"Ensure the checkpoint exists and path is correct."
+        )
     
-    # Check if it's a direct HF checkpoint directory
-    if checkpoint_path.is_dir() and (checkpoint_path / 'config.json').exists():
-        try:
-            print(f"[load_stability_head] Detected HuggingFace checkpoint directory", flush=True)
+    # Check if it's an EsmTherm checkpoint wrapper
+    if checkpoint_path.suffix == '.pth':
+        ckpt = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+        if ckpt.get('model_type') == 'esmtherm_full':
+            # This is an EsmTherm wrapper - load via StabilityHead
+            print(f"[load_stability_head] Detected EsmTherm wrapper", flush=True)
             model = StabilityHead(checkpoint_path=str(checkpoint_path), use_esmtherm=True)
             model = model.to(device)
             model.eval()
             print(f"[load_stability_head] Done", flush=True)
             return model
-        except Exception as e:
-            print(f"[load_stability_head] Error loading HF checkpoint: {e}", flush=True)
+        else:
+            raise ValueError(
+                f"Checkpoint {checkpoint_path} is not an EsmTherm wrapper. "
+                f"Expected model_type='esmtherm_full' in checkpoint."
+            )
     
-    # Fallback: load placeholder model
-    print("Warning: Loading placeholder stability head (not EsmTherm)", flush=True)
-    model = StabilityHead(use_esmtherm=False)
+    # Check if it's a direct HF checkpoint directory
+    if checkpoint_path.is_dir() and (checkpoint_path / 'config.json').exists():
+        print(f"[load_stability_head] Detected HuggingFace checkpoint directory", flush=True)
+        model = StabilityHead(checkpoint_path=str(checkpoint_path), use_esmtherm=True)
+        model = model.to(device)
+        model.eval()
+        print(f"[load_stability_head] Done", flush=True)
+        return model
     
-    # Try to load state dict if available
-    if checkpoint_path.exists() and checkpoint_path.suffix == '.pth':
-        try:
-            checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
-            if 'model_state_dict' in checkpoint and hasattr(model, 'mlp'):
-                model.mlp.load_state_dict(checkpoint['model_state_dict'])
-                print(f"[load_stability_head] Loaded MLP weights from checkpoint")
-        except Exception as e:
-            print(f"Warning: Could not load checkpoint state: {e}")
-    
-    model = model.to(device)
-    model.eval()
-    print(f"[load_stability_head] Done (placeholder)", flush=True)
-    return model
+    # No valid checkpoint found
+    raise ValueError(
+        f"Invalid stability checkpoint at {checkpoint_path}. "
+        f"Expected either:\n"
+        f"  1. EsmTherm wrapper (.pth with model_type='esmtherm_full')\n"
+        f"  2. HuggingFace checkpoint directory (with config.json)"
+    )
 

@@ -97,6 +97,7 @@ class UnifiedPropertyFunction:
         device: str = "cuda",
         max_length: int = 100,
         representation_layer: int = 33,
+        normalization_stats_path: Optional[str] = None,
     ):
         """
         Initialize unified property function.
@@ -112,6 +113,7 @@ class UnifiedPropertyFunction:
             device: Device to run computations on
             max_length: Maximum sequence length for normalization
             representation_layer: Which ESM layer to use (33 for ESM2-650M)
+            normalization_stats_path: Path to JSON with property normalization stats
         """
         self.esm_model = esm_model.to(device).eval()
         self.batch_converter = batch_converter
@@ -123,6 +125,22 @@ class UnifiedPropertyFunction:
         self.device = device
         self.max_length = max_length
         self.representation_layer = representation_layer
+        
+        # Load normalization statistics if provided
+        self.property_mean = None
+        self.property_std = None
+        if normalization_stats_path is not None:
+            import json
+            from pathlib import Path
+            stats_path = Path(normalization_stats_path)
+            if stats_path.exists():
+                with open(stats_path, 'r') as f:
+                    stats = json.load(f)
+                self.property_mean = torch.tensor(stats['mean'], dtype=torch.float32, device=device)
+                self.property_std = torch.tensor(stats['std'], dtype=torch.float32, device=device)
+                print(f"Loaded normalization stats from {stats_path}")
+            else:
+                print(f"Warning: Normalization stats file not found: {stats_path}")
         
         # Freeze all models - they are fixed property predictors
         for param in self.esm_model.parameters():
@@ -180,12 +198,12 @@ class UnifiedPropertyFunction:
             raise ValueError(f"Stability head returned unexpected shape: {p_stab.shape}, expected 1D")
         
         # 4. Compute toxicity scores p_tox
-        # For toxicity, we need domain vectors. If domain_encoder is available, use it.
-        # Otherwise, use zero vectors as a fallback.
+        # Note: Toxicity model is trained with zero domain vectors to match inference.
+        # This is intentional - we don't have domain annotation at inference time.
         if self.domain_encoder is not None:
             domain_vectors = self._get_domain_vectors(sequences)
         else:
-            # Fallback: zero domain vectors (256-dim for ToxDL2 compatibility)
+            # Zero domain vectors (toxicity model trained to handle this)
             domain_vectors = torch.zeros(
                 (len(sequences), 256),
                 device=self.device,
@@ -229,6 +247,10 @@ class UnifiedPropertyFunction:
         
         if properties.shape != (batch_size, 4):
             raise ValueError(f"Final properties shape wrong: {properties.shape} (expected ({batch_size}, 4))")
+        
+        # Apply Z-score normalization if statistics are available
+        if self.property_mean is not None and self.property_std is not None:
+            properties = (properties - self.property_mean) / (self.property_std + 1e-8)
         
         return properties
     
@@ -319,6 +341,7 @@ def create_unified_property_function(
     esm_model_size: str = "650M",
     device: str = "cuda",
     max_length: int = 100,
+    normalization_stats_path: Optional[str] = None,
 ) -> UnifiedPropertyFunction:
     """
     Convenience function to create a UnifiedPropertyFunction.
@@ -330,6 +353,7 @@ def create_unified_property_function(
         esm_model_size: ESM model size ("650M" or "8M")
         device: Device to run on
         max_length: Maximum sequence length for normalization
+        normalization_stats_path: Path to property normalization stats JSON
     
     Returns:
         Initialized UnifiedPropertyFunction
@@ -370,10 +394,11 @@ def create_unified_property_function(
         activity_head=activity_head,
         toxicity_head=toxicity_head,
         stability_head=stability_head,
-        domain_encoder=None,  # TODO: Add domain encoder if needed
+        domain_encoder=None,
         device=device,
         max_length=max_length,
         representation_layer=representation_layer,
+        normalization_stats_path=normalization_stats_path,
     )
     
     print("✓ Unified property function ready", flush=True)

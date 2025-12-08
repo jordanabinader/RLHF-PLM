@@ -91,12 +91,12 @@ class ToxicityDataset(Dataset):
     """
     Dataset for toxicity prediction.
     
-    Loads sequences, labels, and domain vectors from ToxDL2 format.
+    Loads sequences and labels from ToxDL2 format.
+    Uses zero domain vectors to match inference conditions.
     """
     def __init__(
         self,
         fasta_path: Path,
-        domain_path: Path,
         esm_model,
         batch_converter,
         device: str = "cuda",
@@ -109,59 +109,46 @@ class ToxicityDataset(Dataset):
         # Load data
         self.sequences = []
         self.labels = []
-        self.domain_vectors = []
         self.names = []
         
-        print(f"Loading data from {fasta_path} and {domain_path}...")
-        self._load_data(domain_path)
+        print(f"Loading data from {fasta_path}...")
+        self._load_data(fasta_path)
         
-        print(f"Loaded {len(self)} samples")
+        print(f"Loaded {len(self)} samples (training with zero domain vectors)")
     
-    def _load_data(self, domain_path: Path):
-        """Load sequences, labels, and domain vectors from .domain file."""
-        with open(domain_path, 'r') as f:
+    def _load_data(self, fasta_path: Path):
+        """Load sequences and labels from FASTA file."""
+        with open(fasta_path, 'r') as f:
             lines = f.readlines()
         
         current_name = None
         current_seq = None
-        current_label = None
-        current_domain = None
         
         for line in lines:
             line = line.strip()
             
             if line.startswith('>'):
                 # Save previous entry if complete
-                if current_name and current_seq and current_label is not None and current_domain is not None:
+                if current_name and current_seq:
                     self.names.append(current_name)
                     self.sequences.append(current_seq)
-                    self.labels.append(current_label)
-                    self.domain_vectors.append(current_domain)
+                    # All sequences in training data are toxic (label=1)
+                    # For non-toxic, you'd need to load from a different source
+                    self.labels.append(1)
                 
                 # Start new entry
                 current_name = line[1:]
                 current_seq = None
-                current_label = None
-                current_domain = None
             
             elif sum([char in AMINOACID for char in line]) == len(line) and len(line) > 0:
                 # This is the sequence
                 current_seq = line
-            
-            elif len(line) == 1 and line in ['0', '1']:
-                # This is the label
-                current_label = int(line)
-            
-            elif len(line.split(',')) in [256, 269]:
-                # This is the domain vector
-                current_domain = [float(x) for x in line.split(',')]
         
         # Save last entry
-        if current_name and current_seq and current_label is not None and current_domain is not None:
+        if current_name and current_seq:
             self.names.append(current_name)
             self.sequences.append(current_seq)
-            self.labels.append(current_label)
-            self.domain_vectors.append(current_domain)
+            self.labels.append(1)
     
     def __len__(self):
         return len(self.sequences)
@@ -170,7 +157,7 @@ class ToxicityDataset(Dataset):
         """
         Returns:
             esm_embedding: (1280,) tensor
-            domain_vector: (256,) tensor
+            domain_vector: (256,) tensor - always zeros
             label: scalar tensor (0 or 1)
         """
         # Get ESM embedding
@@ -181,13 +168,8 @@ class ToxicityDataset(Dataset):
             self.device
         )
         
-        # Get domain vector (pad or truncate to 256)
-        domain_vec = self.domain_vectors[idx]
-        if len(domain_vec) < 256:
-            domain_vec = domain_vec + [0.0] * (256 - len(domain_vec))
-        elif len(domain_vec) > 256:
-            domain_vec = domain_vec[:256]
-        domain_vec = torch.tensor(domain_vec, dtype=torch.float32)
+        # Always use zero domain vectors (matches inference conditions)
+        domain_vec = torch.zeros(256, dtype=torch.float32)
         
         label = torch.tensor(self.labels[idx], dtype=torch.float32)
         
@@ -264,9 +246,11 @@ def train_toxicity_model(
     
     # Load datasets
     print("\nLoading datasets...")
+    print("Note: Training toxicity model with zero domain vectors")
+    print("This matches inference conditions (no domain annotation available)")
+    
     train_dataset = ToxicityDataset(
         fasta_path=data_dir / "protein_sequences" / "train.fasta",
-        domain_path=data_dir / "domain_data" / "train.domain",
         esm_model=protein_model,
         batch_converter=batch_converter,
         device=device,
@@ -274,7 +258,6 @@ def train_toxicity_model(
     
     val_dataset = ToxicityDataset(
         fasta_path=data_dir / "protein_sequences" / "valid.fasta",
-        domain_path=data_dir / "domain_data" / "valid.domain",
         esm_model=protein_model,
         batch_converter=batch_converter,
         device=device,
@@ -282,7 +265,6 @@ def train_toxicity_model(
     
     test_dataset = ToxicityDataset(
         fasta_path=data_dir / "protein_sequences" / "test.fasta",
-        domain_path=data_dir / "domain_data" / "test.domain",
         esm_model=protein_model,
         batch_converter=batch_converter,
         device=device,

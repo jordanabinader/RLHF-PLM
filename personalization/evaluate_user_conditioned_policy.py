@@ -210,21 +210,22 @@ def main():
         
         # Check if this is a user-conditioned checkpoint
         projector_path = Path(args.checkpoint) / "user_projector.pt"
-        if projector_path.exists():
-            print("   Detected user-conditioned checkpoint")
-            print("   Wrapping policy with user conditioning...")
-            policy = UserConditionedPolicyWrapper(base_policy)
-            
-            # Load user_projector weights
-            print(f"   Loading user projector from {projector_path}")
-            policy.load_user_projector(str(args.checkpoint))
-            print("   ✓ User-conditioned policy loaded successfully")
-        else:
-            print("   Warning: No user_projector.pt found in checkpoint")
-            print("   This appears to be a standard (non-user-conditioned) checkpoint")
-            print("   Wrapping with user conditioning using randomly initialized projector...")
-            policy = UserConditionedPolicyWrapper(base_policy)
-            print("   Note: Results may not reflect trained user conditioning")
+        if not projector_path.exists():
+            raise FileNotFoundError(
+                f"user_projector.pt not found at {projector_path}. "
+                f"This checkpoint was not trained with user conditioning. "
+                f"Please use a checkpoint from user-conditioned GRPO training "
+                f"(trained with --use-personalization flag)."
+            )
+        
+        print("   Detected user-conditioned checkpoint")
+        print("   Wrapping policy with user conditioning...")
+        policy = UserConditionedPolicyWrapper(base_policy)
+        
+        # Load user_projector weights
+        print(f"   Loading user projector from {projector_path}")
+        policy.load_user_projector(str(args.checkpoint))
+        print("   ✓ User-conditioned policy loaded successfully")
         
         policy = policy.to(args.device).eval()
         print(f"   ✓ Policy loaded from {args.checkpoint}")
