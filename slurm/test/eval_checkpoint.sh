@@ -10,8 +10,8 @@
 #SBATCH --mem=32G                         # Memory
 #SBATCH -t 0:30:00                        # Time limit (30 min)
 #SBATCH -G 1                              # 1 GPU
-#SBATCH -o logs/eval_checkpoint_50_%j.out # STDOUT log
-#SBATCH -e logs/eval_checkpoint_50_%j.err # STDERR log
+#SBATCH -o logs/user_conditioned_multi_eval_1207_%j.out # STDOUT log
+#SBATCH -e logs/user_conditioned_multi_eval_1207_%j.err # STDERR log
 
 #########################
 # Environment setup     #
@@ -44,12 +44,12 @@ python -c "import torch; print(f'torch: {torch.__version__}')"
 
 # Use absolute paths
 REPO_ROOT="/orcd/home/002/jordancn/RLHF-PLM"  # Adjust to your actual path
-CHECKPOINT="${REPO_ROOT}/grpo_runs/collapse_r0/checkpoint_final"
+CHECKPOINT="${REPO_ROOT}/grpo_runs/user_conditioned_multi/final_model"
 TOKENIZER_PATH="${REPO_ROOT}/amp_design/progen2hf/progen2-small"
 ACTIVITY_CHECKPOINT="${REPO_ROOT}/amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/toxicity_head.pth"
 STABILITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/stability_head.pth"
-OUTPUT_DIR="${REPO_ROOT}/evaluation_results/checkpoint_50_eval"
+OUTPUT_DIR="${REPO_ROOT}/evaluation_results/user_conditioned_multi_eval_1207"
 NUM_SEQUENCES=200  # Sequences per persona
 ESM_MODE="650M"
 

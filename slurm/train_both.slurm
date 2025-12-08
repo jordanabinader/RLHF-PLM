@@ -1,14 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=train_property_heads
-#SBATCH --output=logs/property_heads_%j.out
-#SBATCH --error=logs/property_heads_%j.err
-#SBATCH --time=6:00:00
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH -J train_both_property_heads             # Job name
+#SBATCH -p mit_normal_gpu                 # GPU partition
+#SBATCH -c 4                              # CPU cores
+#SBATCH --mem=32G                         # Memory
+#SBATCH -t 4:00:00                        # Time limit (30 min)
+#SBATCH -G 1                              # 1 GPU
+#SBATCH -o logs/property_heads_%j.out # STDOUT log
+#SBATCH -e logs/property_heads_%j.err # STDERR log
 
 # Print job information
 echo "========================================================================"

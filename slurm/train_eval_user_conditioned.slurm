@@ -92,19 +92,20 @@ ACTIVITY_CHECKPOINT="${REPO_ROOT}/amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/toxicity_head.pth"
 STABILITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/stability_head.pth"
 NORMALIZATION_STATS="${REPO_ROOT}/personalization/checkpoints/property_normalization.json"
-OUTPUT_DIR="grpo_runs/user_conditioned_from_pretrained"
-EVAL_DIR="evaluation_results/user_conditioned_from_pretrained"
+LORA_CHECKPOINT="${REPO_ROOT}/amp_design/grpo_ckpt"
+OUTPUT_DIR="grpo_runs/user_conditioned_multi"
+EVAL_DIR="evaluation_results/user_conditioned_multi"
 
-# Training parameters (adjusted for warm start from pre-trained checkpoint)
-EPOCHS=1
+# Training parameters
+EPOCHS=4
 BATCH_SIZE=32
-STEPS=150
-LR=1e-5  # Lower LR for fine-tuning from checkpoint
+STEPS=40 # Increased from 100 to allow more stable convergence
+LR=1e-5
 SAVE_EVERY=25
 REWARD_PENALTY=-0.5
 MIN_CHARGE=0.0
-BETA=0.2  # Slightly higher for warm start
-KL_CLIP_VALUE=0.1
+BETA=0.2  # Increased from 0.1 to prevent KL divergence explosion
+KL_CLIP_VALUE=0.1  # Increased from 0.0 to clip extreme divergence
 
 echo ""
 echo "========================================"

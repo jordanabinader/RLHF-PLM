@@ -26,9 +26,11 @@ REPO_ROOT = Path(__file__).parent.parent.resolve()
 AMP_DESIGN_DIR = REPO_ROOT / "amp_design"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+AMP_DESIGN_DIR = REPO_ROOT / "amp_design"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 if str(AMP_DESIGN_DIR) not in sys.path:
     sys.path.insert(0, str(AMP_DESIGN_DIR))
-
 from personalization.unified_property_fn import create_unified_property_function
 from personalization.personas import get_persona, list_personas, compute_personalized_reward
 

@@ -4,6 +4,17 @@
 # This script generates the property normalization statistics required to fix objective inversion.
 # Run this ONCE before starting GRPO training.
 
+
+#SBATCH -J setup_normalization             # Job name
+#SBATCH -p mit_normal_gpu                 # GPU partition
+#SBATCH -c 4                              # CPU cores
+#SBATCH --mem=32G                         # Memory
+#SBATCH -t 0:30:00                        # Time limit (30 min)
+#SBATCH -G 1                              # 1 GPU
+#SBATCH -o logs/normalization/setup_normalization_%j.out # STDOUT log
+#SBATCH -e logs/normalization/setup_normalization_%j.err # STDERR log
+
+
 echo "============================================================"
 echo "Setting up Property Normalization Statistics"
 echo "============================================================"
@@ -12,12 +23,35 @@ echo "This will generate 5000 sequences from the base model and"
 echo "calculate mean/std for all properties (activity, toxicity,"
 echo "stability, length)."
 echo ""
+# Create logs directory
+mkdir -p logs
 
+# Load the base system python
+module load miniforge
+
+# Activate the virtual environment
+source venv/bin/activate
+
+# Ensure we rely ONLY on this venv
+export PYTHONNOUSERSITE=1
+
+echo "Node: $(hostname)"
+echo "GPUs visible to this job:"
+nvidia-smi || echo "nvidia-smi not found"
+
+# Verify versions
+echo "Package versions:"
+python -c "import transformers; print(f'transformers: {transformers.__version__}')"
+python -c "import torch; print(f'torch: {torch.__version__}')"
+
+#########################
 # Set paths
-ACTIVITY_CHECKPOINT="amp_design/best_new_4.pth"
-TOXICITY_CHECKPOINT="personalization/checkpoints/toxicity_head.pth"
-STABILITY_CHECKPOINT="personalization/checkpoints/stability_head.pth"
-OUTPUT_PATH="personalization/checkpoints/property_normalization.json"
+
+REPO_ROOT="/orcd/home/002/jordancn/RLHF-PLM" 
+ACTIVITY_CHECKPOINT="${REPO_ROOT}/amp_design/best_new_4.pth"
+TOXICITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/toxicity_head.pth"
+STABILITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/stability_head.pth"
+OUTPUT_PATH="${REPO_ROOT}/personalization/checkpoints/property_normalization.json"
 
 # Check if normalization stats already exist
 if [ -f "$OUTPUT_PATH" ]; then
