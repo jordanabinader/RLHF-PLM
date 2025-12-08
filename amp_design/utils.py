@@ -130,7 +130,7 @@ def load_pretrained_progen_model(
     print(f"[utils] Tokenizer loaded. Loading model from {base_model_path}...", flush=True)
     model = AutoModelForCausalLM.from_pretrained(
         base_model_path,
-        local_files_only=True,
+        local_files_only=False,
         trust_remote_code=True,
         torch_dtype=torch_dtype,
         device_map=device_map,

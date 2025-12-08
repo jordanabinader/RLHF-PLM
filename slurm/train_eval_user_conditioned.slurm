@@ -85,27 +85,26 @@ REPO_ROOT="/orcd/home/002/jordancn/RLHF-PLM"  # Adjust to your actual path
 cd "$REPO_ROOT"
 export PYTHONPATH="$REPO_ROOT:$REPO_ROOT/amp_design:$PYTHONPATH"
 
-BASE_MODEL_PATH="${REPO_ROOT}/amp_design/progen2hf/progen2-small"
-TOKENIZER_PATH="${REPO_ROOT}/amp_design/progen2hf/progen2-small"
-LORA_CHECKPOINT="${REPO_ROOT}/amp_design/grpo_ckpt"
+BASE_MODEL_PATH="hugohrban/progen2-large"  # Using large model (4096 dim) to match checkpoint
+TOKENIZER_PATH="hugohrban/progen2-large"
+LORA_CHECKPOINT="${REPO_ROOT}/amp_design/grpo_ckpt"  # Pre-trained GRPO checkpoint (compatible with large)
 ACTIVITY_CHECKPOINT="${REPO_ROOT}/amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/toxicity_head.pth"
 STABILITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/stability_head.pth"
 NORMALIZATION_STATS="${REPO_ROOT}/personalization/checkpoints/property_normalization.json"
-LORA_CHECKPOINT="${REPO_ROOT}/amp_design/grpo_ckpt"
-OUTPUT_DIR="grpo_runs/user_conditioned_multi"
-EVAL_DIR="evaluation_results/user_conditioned_multi"
+OUTPUT_DIR="grpo_runs/user_conditioned_large_multi"
+EVAL_DIR="evaluation_results/user_conditioned_large_multi"
 
-# Training parameters
+# Training parameters (adjusted for ProGen2-large with warm start)
 EPOCHS=4
-BATCH_SIZE=32
-STEPS=40 # Increased from 100 to allow more stable convergence
-LR=1e-5
+BATCH_SIZE=16  # Reduced for larger model (more GPU memory needed)
+STEPS=40
+LR=1e-5  # Lower LR for fine-tuning from checkpoint
 SAVE_EVERY=25
 REWARD_PENALTY=-0.5
 MIN_CHARGE=0.0
-BETA=0.2  # Increased from 0.1 to prevent KL divergence explosion
-KL_CLIP_VALUE=0.1  # Increased from 0.0 to clip extreme divergence
+BETA=0.2  # Slightly higher for warm start
+KL_CLIP_VALUE=0.1
 
 echo ""
 echo "========================================"
@@ -143,8 +142,8 @@ python  amp_design/grpo.py \
   --reward-penalty $REWARD_PENALTY \
   --min-charge $MIN_CHARGE \
   --esm-mode "650M" \
-  --tracker-project-name "user_conditioned_grpo" \
-  --exp-name "from_pretrained_${SLURM_JOB_ID}"
+  --tracker-project-name "user_conditioned_grpo_large" \
+  --exp-name "large_from_checkpoint_${SLURM_JOB_ID}"
 
 TRAIN_EXIT_CODE=$?
 
