@@ -183,7 +183,7 @@ def calculate_diversity(sequences: List[str]) -> Dict:
 def main():
     parser = argparse.ArgumentParser(description="Evaluate user-conditioned policy")
     parser.add_argument("--checkpoint", type=Path, required=True, help="Path to trained policy checkpoint (LoRA adapter)")
-    parser.add_argument("--base-model-path", type=str, required=True, help="Path to base ProGen2 model (e.g., hugohrban/progen2-large)")
+    parser.add_argument("--base-model-path", type=str, required=True, help="Path to base ProGen2 model (e.g., hugohrban/progen2-xlarge)")
     parser.add_argument("--tokenizer-path", type=Path, required=True, help="Path to tokenizer")
     parser.add_argument("--activity-checkpoint", type=Path, required=True, help="Path to activity checkpoint")
     parser.add_argument("--toxicity-checkpoint", type=Path, required=True, help="Path to toxicity checkpoint")

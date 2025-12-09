@@ -299,8 +299,8 @@ def main():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="hugohrban/progen2-large",
-        help="Base model for sequence generation (use large to match training checkpoint)"
+        default="hugohrban/progen2-xlarge",
+        help="Base model for sequence generation (use xlarge to match training checkpoint)"
     )
     parser.add_argument(
         "--esm_model_size",

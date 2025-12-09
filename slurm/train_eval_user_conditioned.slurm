@@ -85,17 +85,17 @@ REPO_ROOT="/orcd/home/002/jordancn/RLHF-PLM"  # Adjust to your actual path
 cd "$REPO_ROOT"
 export PYTHONPATH="$REPO_ROOT:$REPO_ROOT/amp_design:$PYTHONPATH"
 
-BASE_MODEL_PATH="hugohrban/progen2-large"  # Using large model (4096 dim) to match checkpoint
-TOKENIZER_PATH="hugohrban/progen2-large"
+BASE_MODEL_PATH="hugohrban/progen2-xlarge"  # Using xlarge model (4096 dim) to match checkpoint
+TOKENIZER_PATH="hugohrban/progen2-xlarge"
 LORA_CHECKPOINT="${REPO_ROOT}/amp_design/grpo_ckpt"  # Pre-trained GRPO checkpoint (compatible with large)
 ACTIVITY_CHECKPOINT="${REPO_ROOT}/amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/toxicity_head.pth"
 STABILITY_CHECKPOINT="${REPO_ROOT}/personalization/checkpoints/stability_head.pth"
 NORMALIZATION_STATS="${REPO_ROOT}/personalization/checkpoints/property_normalization.json"
-OUTPUT_DIR="grpo_runs/user_conditioned_large_multi"
-EVAL_DIR="evaluation_results/user_conditioned_large_multi"
+OUTPUT_DIR="grpo_runs/user_conditioned_xlarge_multi"
+EVAL_DIR="evaluation_results/user_conditioned_xlarge_multi"
 
-# Training parameters (adjusted for ProGen2-large with warm start)
+# Training parameters (adjusted for ProGen2-xlarge with warm start)
 EPOCHS=4
 BATCH_SIZE=16  # Reduced for larger model (more GPU memory needed)
 STEPS=40
@@ -142,8 +142,8 @@ python  amp_design/grpo.py \
   --reward-penalty $REWARD_PENALTY \
   --min-charge $MIN_CHARGE \
   --esm-mode "650M" \
-  --tracker-project-name "user_conditioned_grpo_large" \
-  --exp-name "large_from_checkpoint_${SLURM_JOB_ID}"
+  --tracker-project-name "user_conditioned_grpo_xlarge" \
+  --exp-name "xlarge_from_checkpoint_${SLURM_JOB_ID}"
 
 TRAIN_EXIT_CODE=$?
 

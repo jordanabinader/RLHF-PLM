@@ -7,9 +7,9 @@ echo "User-Conditioned GRPO Training"
 echo "=================================="
 
 # Set paths (modify these to match your setup)
-BASE_MODEL_PATH="hugohrban/progen2-large"  # Using large model (4096 dim) to match checkpoint
-TOKENIZER_PATH="hugohrban/progen2-large"
-LORA_CHECKPOINT="amp_design/grpo_ckpt"  # Pre-trained GRPO checkpoint (compatible with large model)
+BASE_MODEL_PATH="hugohrban/progen2-xlarge"  # Using xlarge model (4096 dim) to match checkpoint
+TOKENIZER_PATH="hugohrban/progen2-xlarge"
+LORA_CHECKPOINT="amp_design/grpo_ckpt"  # Pre-trained GRPO checkpoint (compatible with xlarge model)
 ACTIVITY_CHECKPOINT="amp_design/best_new_4.pth"
 TOXICITY_CHECKPOINT="personalization/checkpoints/toxicity_head.pth"
 STABILITY_CHECKPOINT="personalization/checkpoints/stability_head.pth"
@@ -29,7 +29,7 @@ python amp_design/grpo.py \
   --use-personalization \
   --persona-name BalancedDesigner \
   --persona-cycle-mode single \
-  --output-dir grpo_runs/user_conditioned_large_single \
+  --output-dir grpo_runs/user_conditioned_xlarge_single \
   --epochs 5 \
   --batch-size 16 \
   --steps 100 \
@@ -51,7 +51,7 @@ python amp_design/grpo.py \
   --normalization-stats-path "$NORMALIZATION_STATS" \
   --use-personalization \
   --persona-cycle-mode random \
-  --output-dir grpo_runs/user_conditioned_large_multi \
+  --output-dir grpo_runs/user_conditioned_xlarge_multi \
   --epochs 10 \
   --batch-size 16 \
   --steps 100 \

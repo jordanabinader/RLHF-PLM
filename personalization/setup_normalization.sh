@@ -115,7 +115,7 @@ python personalization/calculate_normalization_stats.py \
     --output_path "$OUTPUT_PATH" \
     --num_sequences 5000 \
     --batch_size 8 \
-    --model_name "hugohrban/progen2-large" \
+    --model_name "hugohrban/progen2-xlarge" \
     --esm_model_size 650M \
     --device cuda
 
