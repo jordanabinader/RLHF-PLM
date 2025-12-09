@@ -206,10 +206,19 @@ class DistributedUltraLowMemoryGRPOTrainer:
         self.policy = DDP(self.policy, device_ids=[rank], find_unused_parameters=use_user_conditioning)
         if self.is_main_process:
             print(f"DDP wrapper applied", flush=True)
-            print(f"Creating reference model...", flush=True)
-        self.ref_model = copy.deepcopy(self.policy.module if not use_user_conditioning else self.policy.module.base_policy).to(self.dev).half().eval()
+            print(f"Creating reference model (on CPU to save GPU memory)...", flush=True)
+        
+        # Move reference model to CPU to save GPU memory for xlarge model
+        # Temporarily move policy to CPU for deepcopy, then move back
+        torch.cuda.empty_cache()
+        base_policy_for_ref = self.policy.module if not use_user_conditioning else self.policy.module.base_policy
+        base_policy_for_ref = base_policy_for_ref.cpu()
+        self.ref_model = copy.deepcopy(base_policy_for_ref).half().eval()
+        # Move policy back to GPU
+        self.policy = self.policy.to(self.dev)
+        
         if self.is_main_process:
-            print(f"Reference model created", flush=True)
+            print(f"Reference model created on CPU, policy restored to GPU", flush=True)
         for p in self.ref_model.parameters():
             p.requires_grad = False
         trainable_params = [p for p in self.policy.parameters() if p.requires_grad]

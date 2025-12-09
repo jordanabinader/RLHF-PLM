@@ -40,6 +40,9 @@ source venv/bin/activate
 # 4. CRITICAL: Ensure we rely ONLY on this venv, ignoring local user packages
 export PYTHONNOUSERSITE=1
 
+# 4b. Set PyTorch memory optimization for large models
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
 # 5. Upgrade pip inside the virtual environment
 python -m pip install --upgrade pip
 
@@ -97,7 +100,7 @@ EVAL_DIR="evaluation_results/user_conditioned_xlarge_multi"
 
 # Training parameters (adjusted for ProGen2-xlarge with warm start)
 EPOCHS=4
-BATCH_SIZE=16  # Reduced for larger model (more GPU memory needed)
+BATCH_SIZE=8  # Reduced for xlarge model (762M params needs more GPU memory)
 STEPS=40
 LR=1e-5  # Lower LR for fine-tuning from checkpoint
 SAVE_EVERY=25
