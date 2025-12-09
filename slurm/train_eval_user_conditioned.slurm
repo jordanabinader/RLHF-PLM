@@ -171,6 +171,7 @@ echo ""
 # Run evaluation
 python  personalization/evaluate_user_conditioned_policy.py \
   --checkpoint "$OUTPUT_DIR/final_model" \
+  --base-model-path "$BASE_MODEL_PATH" \
   --tokenizer-path "$TOKENIZER_PATH" \
   --activity-checkpoint "$ACTIVITY_CHECKPOINT" \
   --toxicity-checkpoint "$TOXICITY_CHECKPOINT" \
