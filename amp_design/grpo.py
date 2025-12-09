@@ -188,6 +188,7 @@ class DistributedUltraLowMemoryGRPOTrainer:
         self.world_size = world_size
         self.is_main_process = (rank == 0)
         self.tok = tokenizer
+        self.use_user_conditioning = use_user_conditioning
         
         # Wrap policy with user conditioning if enabled
         if use_user_conditioning:
@@ -365,6 +366,15 @@ class DistributedUltraLowMemoryGRPOTrainer:
             user_context_cpu = local_groups[0]["user_context"]
             if user_context_cpu is not None:
                 user_context = user_context_cpu.to(self.dev)
+        
+        # Validate user_context is present when using user conditioning
+        if self.use_user_conditioning and user_context is None:
+            raise ValueError(
+                "user_context is required when using user-conditioned GRPO training. "
+                "The trainer was initialized with use_user_conditioning=True, but no user_context "
+                "was found in the GRPO groups. This means user_context was not passed to create_grpo_groups(). "
+                "Pass the persona.weights as user_context when creating groups."
+            )
 
         flat_seqs, flat_rewards, lengths, group_sizes = [], [], [], []
         for g in local_groups:
@@ -482,6 +492,14 @@ class DistributedUltraLowMemoryGRPOTrainer:
         return batch_loss.item()
 
     def create_grpo_groups(self, queries, candidates_list, reward_fn, user_context=None):
+        # Validate user_context is provided when using user conditioning
+        if self.use_user_conditioning and user_context is None:
+            raise ValueError(
+                "user_context is required when using user-conditioned GRPO training. "
+                "The trainer was initialized with use_user_conditioning=True, but no user_context "
+                "was provided to create_grpo_groups(). Pass the persona.weights as user_context."
+            )
+        
         groups = []
         for q_idx, (query, candidates) in enumerate(zip(queries, candidates_list)):
             valid_candidates = []
@@ -561,6 +579,14 @@ class DistributedUltraLowMemoryGRPOTrainer:
         return groups
 
     def generate_candidates_ultra_memory_efficient(self, prompts, user_context=None):
+        # Validate user_context is provided when using user conditioning
+        if self.use_user_conditioning and user_context is None:
+            raise ValueError(
+                "user_context is required when using user-conditioned GRPO training. "
+                "The trainer was initialized with use_user_conditioning=True, but no user_context "
+                "was provided to generate_candidates_ultra_memory_efficient(). Pass the persona.weights as user_context."
+            )
+        
         if self.is_main_process:
             print(f"[generate] Starting generation for {len(prompts)} prompts", flush=True)
         bad_ids = [self.tok.encode(w) for w in ["B", "O", "U", "X", "Z"]]

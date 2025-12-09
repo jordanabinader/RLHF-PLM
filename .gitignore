@@ -166,3 +166,6 @@ evaluation_results/
 grpo_runs/
 slurm/test_run/
 *.md
+amp_design/grpo_ckpt/
+amp_design/progen2_xlarge/
+tests/test_user_context_validation.py

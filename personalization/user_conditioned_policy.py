@@ -148,6 +148,13 @@ class UserConditionedPolicyWrapper(nn.Module):
         Returns:
             Generated token IDs
         """
+        if user_context is None:
+            raise ValueError(
+                "user_context is required for UserConditionedPolicyWrapper.generate(). "
+                "This is a user-conditioned model and cannot generate without user preferences. "
+                "Pass persona.weights as user_context parameter."
+            )
+        
         from personalization.length_logit_bias import LengthLogitBias
         
         # Project user context

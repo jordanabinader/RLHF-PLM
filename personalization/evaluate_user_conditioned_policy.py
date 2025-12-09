@@ -53,26 +53,24 @@ def generate_sequences_for_persona(
         
         with torch.no_grad():
             try:
-                if hasattr(policy, 'user_projector'):
-                    # User-conditioned policy - pass user_context
-                    outputs = policy.generate(
-                        batch_prompts,
-                        user_context=user_context,
-                        max_new_tokens=50,
-                        do_sample=True,
-                        top_p=0.9,
-                        temperature=0.8,
+                if not hasattr(policy, 'user_projector'):
+                    raise ValueError(
+                        f"Policy doesn't have user_projector attribute. "
+                        f"This means the loaded checkpoint is not a user-conditioned model. "
+                        f"For user-conditioned generation, the policy must be wrapped with "
+                        f"UserConditionedPolicyWrapper and have a trained user_projector. "
+                        f"Check that the checkpoint was trained with --use-personalization flag."
                     )
-                else:
-                    # Standard policy - user_context will be ignored
-                    print(f"Warning: Policy doesn't have user_projector, generating without user conditioning")
-                    outputs = policy.generate(
-                        batch_prompts,
-                        max_new_tokens=50,
-                        do_sample=True,
-                        top_p=0.9,
-                        temperature=0.8,
-                    )
+                
+                # User-conditioned policy - pass user_context (REQUIRED)
+                outputs = policy.generate(
+                    batch_prompts,
+                    user_context=user_context,
+                    max_new_tokens=50,
+                    do_sample=True,
+                    top_p=0.9,
+                    temperature=0.8,
+                )
             except Exception as e:
                 print(f"Error generating batch {i}: {e}")
                 import traceback
