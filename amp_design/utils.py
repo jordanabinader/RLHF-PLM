@@ -106,17 +106,28 @@ def load_pretrained_progen_model(
     # )
 
     print("[utils] Loading tokenizer...", flush=True)
+    
+    # Check if it's a local path or HuggingFace model ID
     tokenizer_file = os.path.join(tokenizer_path, "tokenizer.json")
-    if not os.path.exists(tokenizer_file):
-        raise ValueError(f"Tokenizer file not found at {tokenizer_file}")
-
-    tokenizer = PreTrainedTokenizerFast(
-        tokenizer_file=tokenizer_file,
-        bos_token="<|bos|>",
-        eos_token="<|endoftext|>",
-        pad_token="<|endoftext|>",
-        unk_token="<|endoftext|>",
-    )
+    is_local = os.path.exists(tokenizer_file)
+    
+    if is_local:
+        # Load from local file
+        print(f"[utils] Loading tokenizer from local file: {tokenizer_file}", flush=True)
+        tokenizer = PreTrainedTokenizerFast(
+            tokenizer_file=tokenizer_file,
+            bos_token="<|bos|>",
+            eos_token="<|endoftext|>",
+            pad_token="<|endoftext|>",
+            unk_token="<|endoftext|>",
+        )
+    else:
+        # Load from HuggingFace
+        print(f"[utils] Loading tokenizer from HuggingFace: {tokenizer_path}", flush=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_path,
+            trust_remote_code=True,
+        )
 
     # Ensure token IDs are set
     if tokenizer.bos_token_id is None:

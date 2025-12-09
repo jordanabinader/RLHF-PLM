@@ -177,8 +177,7 @@ python  personalization/evaluate_user_conditioned_policy.py \
   --stability-checkpoint "$STABILITY_CHECKPOINT" \
   --num-sequences 200 \
   --output-dir "$EVAL_DIR" \
-  --device cuda \
-  --esm-mode "650M"
+  --device cuda
 
 EVAL_EXIT_CODE=$?
 
