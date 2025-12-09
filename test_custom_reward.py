@@ -11,7 +11,11 @@ No training needed - works immediately with your existing model!
 """
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent))
+
+# Add repo root and amp_design to path
+REPO_ROOT = Path(__file__).parent.resolve()
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "amp_design"))
 
 import torch
 import pandas as pd
