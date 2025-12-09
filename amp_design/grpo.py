@@ -194,10 +194,15 @@ class DistributedUltraLowMemoryGRPOTrainer:
         if self.is_main_process:
             print(f"Creating reference model on CPU (before GPU allocation)...", flush=True)
         
+        # Get model hidden dimension for user conditioning
+        model_hidden_dim = policy.config.n_embd if hasattr(policy, 'config') else 4096
+        if self.is_main_process:
+            print(f"Model hidden dimension: {model_hidden_dim}", flush=True)
+        
         # Extract base policy for reference (before wrapping)
         if use_user_conditioning:
             # Create wrapper temporarily just to extract structure
-            temp_wrapper = UserConditionedPolicyWrapper(policy)
+            temp_wrapper = UserConditionedPolicyWrapper(policy, projection_dim=model_hidden_dim)
             base_policy_for_ref = temp_wrapper.base_policy
         else:
             base_policy_for_ref = policy
@@ -213,8 +218,8 @@ class DistributedUltraLowMemoryGRPOTrainer:
         # Now wrap policy with user conditioning if enabled
         if use_user_conditioning:
             if self.is_main_process:
-                print("Wrapping policy with user conditioning...", flush=True)
-            policy = UserConditionedPolicyWrapper(policy)
+                print(f"Wrapping policy with user conditioning (projection_dim={model_hidden_dim})...", flush=True)
+            policy = UserConditionedPolicyWrapper(policy, projection_dim=model_hidden_dim)
             if self.is_main_process:
                 print("Policy wrapped successfully", flush=True)
         

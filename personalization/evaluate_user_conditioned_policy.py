@@ -224,8 +224,13 @@ def main():
             )
         
         print("   Detected user-conditioned checkpoint")
+        
+        # Get model hidden dimension
+        model_hidden_dim = base_policy.config.n_embd if hasattr(base_policy, 'config') else 4096
+        print(f"   Model hidden dimension: {model_hidden_dim}")
+        
         print("   Wrapping policy with user conditioning...")
-        policy = UserConditionedPolicyWrapper(base_policy)
+        policy = UserConditionedPolicyWrapper(base_policy, projection_dim=model_hidden_dim)
         
         # Load user_projector weights
         print(f"   Loading user projector from {projector_path}")
