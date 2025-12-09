@@ -41,7 +41,7 @@ source venv/bin/activate
 export PYTHONNOUSERSITE=1
 
 # 4b. Set PyTorch memory optimization for large models
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 # 5. Upgrade pip inside the virtual environment
 python -m pip install --upgrade pip
@@ -100,8 +100,8 @@ EVAL_DIR="evaluation_results/user_conditioned_xlarge_multi"
 
 # Training parameters (adjusted for ProGen2-xlarge with warm start)
 EPOCHS=4
-BATCH_SIZE=8  # Reduced for xlarge model (762M params needs more GPU memory)
-STEPS=40
+BATCH_SIZE=4  # Very conservative for xlarge model (762M params) to avoid OOM
+STEPS=80  # Increased steps to compensate for smaller batch
 LR=1e-5  # Lower LR for fine-tuning from checkpoint
 SAVE_EVERY=25
 REWARD_PENALTY=-0.5
@@ -145,6 +145,7 @@ python  amp_design/grpo.py \
   --reward-penalty $REWARD_PENALTY \
   --min-charge $MIN_CHARGE \
   --esm-mode "650M" \
+  --world-size 1 \
   --tracker-project-name "user_conditioned_grpo_xlarge" \
   --exp-name "xlarge_from_checkpoint_${SLURM_JOB_ID}"
 

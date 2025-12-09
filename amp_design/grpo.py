@@ -189,7 +189,28 @@ class DistributedUltraLowMemoryGRPOTrainer:
         self.is_main_process = (rank == 0)
         self.tok = tokenizer
         
-        # Wrap policy with user conditioning if enabled
+        # CRITICAL: Create reference model FIRST, before moving policy to GPU
+        # This prevents double GPU memory allocation for xlarge models
+        if self.is_main_process:
+            print(f"Creating reference model on CPU (before GPU allocation)...", flush=True)
+        
+        # Extract base policy for reference (before wrapping)
+        if use_user_conditioning:
+            # Create wrapper temporarily just to extract structure
+            temp_wrapper = UserConditionedPolicyWrapper(policy)
+            base_policy_for_ref = temp_wrapper.base_policy
+        else:
+            base_policy_for_ref = policy
+        
+        # Create reference model on CPU with half precision
+        self.ref_model = copy.deepcopy(base_policy_for_ref).half().eval()
+        for p in self.ref_model.parameters():
+            p.requires_grad = False
+        
+        if self.is_main_process:
+            print(f"Reference model created on CPU", flush=True)
+        
+        # Now wrap policy with user conditioning if enabled
         if use_user_conditioning:
             if self.is_main_process:
                 print("Wrapping policy with user conditioning...", flush=True)
@@ -197,30 +218,19 @@ class DistributedUltraLowMemoryGRPOTrainer:
             if self.is_main_process:
                 print("Policy wrapped successfully", flush=True)
         
+        # Move policy to GPU
         if self.is_main_process:
             print(f"Moving policy to device {device}...", flush=True)
+        torch.cuda.empty_cache()
         self.policy = policy.to(device)
+        
+        # Wrap with DDP
         if self.is_main_process:
             print(f"Wrapping with DDP...", flush=True)
-        # Enable find_unused_parameters for user-conditioned wrapper
         self.policy = DDP(self.policy, device_ids=[rank], find_unused_parameters=use_user_conditioning)
+        
         if self.is_main_process:
             print(f"DDP wrapper applied", flush=True)
-            print(f"Creating reference model (on CPU to save GPU memory)...", flush=True)
-        
-        # Move reference model to CPU to save GPU memory for xlarge model
-        # Temporarily move policy to CPU for deepcopy, then move back
-        torch.cuda.empty_cache()
-        base_policy_for_ref = self.policy.module if not use_user_conditioning else self.policy.module.base_policy
-        base_policy_for_ref = base_policy_for_ref.cpu()
-        self.ref_model = copy.deepcopy(base_policy_for_ref).half().eval()
-        # Move policy back to GPU
-        self.policy = self.policy.to(self.dev)
-        
-        if self.is_main_process:
-            print(f"Reference model created on CPU, policy restored to GPU", flush=True)
-        for p in self.ref_model.parameters():
-            p.requires_grad = False
         trainable_params = [p for p in self.policy.parameters() if p.requires_grad]
         total_trainable_params = sum(p.numel() for p in trainable_params)
         if self.is_main_process:
