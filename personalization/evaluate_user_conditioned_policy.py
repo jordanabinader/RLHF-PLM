@@ -226,7 +226,12 @@ def main():
         print("   Detected user-conditioned checkpoint")
         
         # Get model hidden dimension
-        model_hidden_dim = base_policy.config.n_embd if hasattr(base_policy, 'config') else 4096
+        if hasattr(base_policy, 'config'):
+            # ProGenConfig exposes n_embd through hidden_size property
+            model_hidden_dim = getattr(base_policy.config, 'hidden_size',
+                                      getattr(base_policy.config, 'n_embd', 4096))
+        else:
+            model_hidden_dim = 4096
         print(f"   Model hidden dimension: {model_hidden_dim}")
         
         print("   Wrapping policy with user conditioning...")

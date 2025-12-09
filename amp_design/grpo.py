@@ -195,7 +195,12 @@ class DistributedUltraLowMemoryGRPOTrainer:
             print(f"Creating reference model on CPU (before GPU allocation)...", flush=True)
         
         # Get model hidden dimension for user conditioning
-        model_hidden_dim = policy.config.n_embd if hasattr(policy, 'config') else 4096
+        if hasattr(policy, 'config'):
+            # ProGenConfig exposes n_embd through hidden_size property
+            model_hidden_dim = getattr(policy.config, 'hidden_size', 
+                                      getattr(policy.config, 'n_embd', 4096))
+        else:
+            model_hidden_dim = 4096
         if self.is_main_process:
             print(f"Model hidden dimension: {model_hidden_dim}", flush=True)
         
