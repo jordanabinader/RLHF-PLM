@@ -29,6 +29,34 @@ from personalization.user_conditioned_policy import UserConditionedPolicyWrapper
 from personalization.personas import compute_personalized_reward
 
 
+def detect_projection_dim(checkpoint_path: str) -> int:
+    """
+    Auto-detect the projection_dim from saved user_projector checkpoint.
+    
+    Args:
+        checkpoint_path: Path to checkpoint directory
+    
+    Returns:
+        projection_dim used during training
+    """
+    projector_path = Path(checkpoint_path) / "user_projector.pt"
+    if not projector_path.exists():
+        raise FileNotFoundError(f"user_projector.pt not found at {checkpoint_path}")
+    
+    state_dict = torch.load(projector_path, map_location='cpu')
+    
+    # The output dimension is in mlp.3.weight (last linear layer)
+    # Shape is [output_dim, hidden_dim]
+    if 'mlp.3.weight' in state_dict:
+        projection_dim = state_dict['mlp.3.weight'].shape[0]
+    else:
+        # Fallback: try to find last linear layer
+        last_weight_key = [k for k in state_dict.keys() if 'weight' in k][-1]
+        projection_dim = state_dict[last_weight_key].shape[0]
+    
+    return projection_dim
+
+
 def create_my_custom_persona() -> Persona:
     """
     Define your custom reward function here by setting the weights.
@@ -70,17 +98,14 @@ def load_user_conditioned_model(checkpoint_path: str, tokenizer_path: str, devic
         checkpoint_path, tokenizer_path
     )
     
-    # Wrap with user conditioning
-    policy = UserConditionedPolicyWrapper(base_policy)
+    # Auto-detect projection_dim from checkpoint
+    projection_dim = detect_projection_dim(checkpoint_path)
+    print(f"  Detected projection_dim: {projection_dim}")
+    
+    # Wrap with user conditioning using correct projection_dim
+    policy = UserConditionedPolicyWrapper(base_policy, projection_dim=projection_dim)
     
     # Load the trained user projector
-    projector_path = Path(checkpoint_path) / "user_projector.pt"
-    if not projector_path.exists():
-        raise FileNotFoundError(
-            f"user_projector.pt not found at {checkpoint_path}. "
-            f"Make sure this is a user-conditioned checkpoint!"
-        )
-    
     policy.load_user_projector(checkpoint_path)
     policy = policy.to(device).eval()
     
